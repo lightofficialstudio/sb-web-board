@@ -101,7 +101,8 @@ export default function Navbar() {
 
   // ✨ ตรวจสอบว่า EMPLOYER มี SchoolProfile แล้วหรือยัง ก่อนเข้าหน้าที่ต้องการ school data
   const handleEmployerNavClick = (href: string) => (e: React.MouseEvent) => {
-    if (user?.role === "EMPLOYER" && !user.school_name) {
+    // ✨ ถ้ากำลัง delegate อยู่ → มี schoolProfile จากโรงเรียนอื่นแล้ว ข้ามได้เลย
+    if (user?.role === "EMPLOYER" && !user.school_name && !delegatedActive) {
       e.preventDefault();
       setShowProfileModal(true);
       return;

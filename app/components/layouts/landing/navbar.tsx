@@ -385,19 +385,21 @@ export default function Navbar() {
         }
       },
     },
-    // ✨ [Delegated Access — แสดงเฉพาะเมื่อมีสิทธิ์ที่ได้รับมอบจริง]
-    ...(delegatedSchools.length > 0
+    // ✨ [Delegated Access — แสดงเสมอสำหรับ EMPLOYER]
+    ...(user?.role === "EMPLOYER"
       ? [
           {
             key: "delegated-access",
             label: (
               <Flex align="center" justify="space-between" gap={8}>
-                <span>การเข้าถึงของผู้รับมอบสิทธิ์</span>
-                <Badge
-                  count={delegatedSchools.length}
-                  size="small"
-                  color={token.colorPrimary}
-                />
+                <span>การเข้าถึงที่ได้รับมอบ</span>
+                {delegatedSchools.length > 0 && (
+                  <Badge
+                    count={delegatedSchools.length}
+                    size="small"
+                    color={token.colorPrimary}
+                  />
+                )}
               </Flex>
             ),
             icon: <KeyOutlined />,
@@ -910,7 +912,7 @@ export default function Navbar() {
                   strong
                   style={{ cursor: "pointer", fontSize: scrolled ? 13 : 14 }}
                 >
-                  โปรไฟล์ของฉัน
+                  จัดการโปรไฟล์โรงเรียน
                 </Text>
               </Link>
               <Link href="/pages/blog" style={{ textDecoration: "none" }}>

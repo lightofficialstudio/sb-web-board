@@ -27,6 +27,7 @@ import { useEffect, useState } from "react";
 import {
   requestCreateJob,
   requestFetchJobById,
+  requestSuggestPosition,
   requestUpdateJob,
 } from "./_api/job-post-api";
 import { BasicInfoSection } from "./_components/basic-info-section";
@@ -128,6 +129,8 @@ export default function PostJobPage() {
     isSubmitting,
     setSelectedProvinceId,
     setSelectedDistrictId,
+    positionOptions,
+    addPositionOption,
   } = useJobPostStore();
   const [isLoadingJob, setIsLoadingJob] = useState(false);
   const [isMockLoading, setIsMockLoading] = useState(false);
@@ -252,6 +255,20 @@ export default function PostJobPage() {
 
     setSubmitting(true);
     try {
+      // ✨ ถ้า title เป็น free text ที่ไม่มีใน config → auto-suggest ก่อน submit
+      const titleValue = (values.title as string) ?? "";
+      const isKnownPosition = positionOptions.some(
+        (o) => o.label === titleValue || o.value === titleValue,
+      );
+      if (titleValue && !isKnownPosition) {
+        try {
+          const created = await requestSuggestPosition(titleValue, null);
+          addPositionOption(created);
+        } catch {
+          // ✨ suggest ล้มเหลว — ยังคง submit job ด้วย free text ได้
+        }
+      }
+
       const payload = toApiPayload(values);
 
       if (isEdit && jobId) {

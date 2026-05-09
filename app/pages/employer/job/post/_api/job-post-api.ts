@@ -49,6 +49,19 @@ export const requestFetchConfigOptions = async (group: string): Promise<ConfigOp
   return data.data ?? [];
 };
 
+// ✨ auto-suggest ตำแหน่งงานใหม่ที่ยังไม่มีใน config
+// ถ้ามีอยู่แล้ว API จะ return ของเดิม ถ้าไม่มีจะสร้างใหม่
+export const requestSuggestPosition = async (
+  label: string,
+  parentValue: string | null = null,
+): Promise<ConfigOption> => {
+  const { data } = await axios.post<ApiResponse<ConfigOption>>(
+    `/api/v1/config/options`,
+    { group: "job_position", label, parent_value: parentValue },
+  );
+  return data.data;
+};
+
 // ✨ ดึงข้อมูลประกาศงานตาม ID
 export const requestFetchJobById = async (userId: string, jobId: string) => {
   const { data } = await axios.get<ApiResponse<Record<string, unknown>>>(

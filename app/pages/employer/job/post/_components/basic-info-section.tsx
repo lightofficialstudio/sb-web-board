@@ -1,9 +1,10 @@
 "use client";
 
 import { ThunderboltOutlined } from "@ant-design/icons";
-import { Card, Col, Form, InputNumber, Row, Select, Space, theme } from "antd";
-import { useEffect, useState } from "react";
+import { AutoComplete, Card, Col, Form, InputNumber, Row, Select, Space, theme } from "antd";
+import { useEffect, useRef, useState } from "react";
 import { type ConfigOption, requestFetchConfigOptions } from "../_api/job-post-api";
+import { useJobPostStore } from "../_stores/job-post-store";
 
 // ✨ positions ที่มี parentValue = "requires_subject" → แสดง subject fields
 const REQUIRES_SUBJECT_MARKER = "requires_subject";
@@ -12,24 +13,47 @@ const REQUIRES_SUBJECT_MARKER = "requires_subject";
 export const BasicInfoSection = () => {
   const { token } = theme.useToken();
   const form = Form.useFormInstance();
+  const { setPositionOptions } = useJobPostStore();
 
   // ✨ ดึง job_position — root = ตำแหน่งทั่วไป, parentValue="requires_subject" = ตำแหน่งครู
-  const [positionOptions, setPositionOptions] = useState<ConfigOption[]>([]);
+  const [positionOptions, setLocalPositionOptions] = useState<ConfigOption[]>([]);
   // ✨ ดึง job_category — root = กลุ่มวิชา, children = วิชาย่อย
   const [categoryOptions, setCategoryOptions] = useState<ConfigOption[]>([]);
 
   const [selectedPosition, setSelectedPosition] = useState<ConfigOption | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<string>("");
+  // ✨ ค่าที่แสดงใน AutoComplete input
+  const [inputValue, setInputValue] = useState<string>("");
+  // ✨ ป้องกัน sync edit-mode ซ้ำ
+  const didSyncEdit = useRef(false);
 
   useEffect(() => {
-    requestFetchConfigOptions("job_position").then(setPositionOptions);
+    requestFetchConfigOptions("job_position").then((opts) => {
+      setLocalPositionOptions(opts);
+      // ✨ แชร์ไปที่ store เพื่อให้ page.tsx ใช้ suggest ตอน submit
+      setPositionOptions(opts);
+    });
     requestFetchConfigOptions("job_category").then(setCategoryOptions);
-  }, []);
+  }, [setPositionOptions]);
 
-  // ✨ ตำแหน่งที่แสดงใน dropdown (เฉพาะ active, ไม่รวม marker node)
+  // ✨ sync inputValue กับ form field title เมื่อ edit mode โหลดข้อมูลเสร็จ
+  const titleFieldValue = Form.useWatch("title", form);
+  useEffect(() => {
+    if (didSyncEdit.current) return;
+    if (!titleFieldValue) return;
+    didSyncEdit.current = true;
+    setInputValue(String(titleFieldValue));
+  }, [titleFieldValue]);
+
+  // ✨ ตำแหน่งที่แสดงใน AutoComplete (ไม่รวม marker node)
   const selectablePositions = positionOptions.filter(
     (o) => o.value !== REQUIRES_SUBJECT_MARKER,
   );
+
+  const autoCompleteOptions = selectablePositions.map((o) => ({
+    label: o.label,
+    value: o.label,
+  }));
 
   // ✨ position นี้ต้องการระบุวิชาหรือไม่
   const requiresSubject = selectedPosition?.parentValue === REQUIRES_SUBJECT_MARKER;
@@ -40,19 +64,35 @@ export const BasicInfoSection = () => {
   // ✨ วิชาย่อยของ group ที่เลือก
   const subjectOptions = selectedGroup
     ? categoryOptions.filter((o) => o.parentValue === selectedGroup)
-    : categoryOptions.filter(() => false);
+    : [];
 
-  const handlePositionChange = (value: string) => {
-    const found = positionOptions.find((o) => o.value === value) ?? null;
+  // ✨ เมื่อ user เลือก option จาก dropdown
+  const handlePositionSelect = (displayLabel: string) => {
+    const found = positionOptions.find((o) => o.label === displayLabel) ?? null;
     setSelectedPosition(found);
-    // ✨ เก็บ label ของ position ไว้ใน hidden field สำหรับส่งเป็น title ไป API
-    form.setFieldValue("titleLabel", found?.label ?? value);
+    setInputValue(displayLabel);
+    form.setFieldValue("titleLabel", displayLabel);
+    form.setFieldValue("title", displayLabel);
     form.setFieldValue("subjectGroup", undefined);
     form.setFieldValue("subjects", undefined);
     setSelectedGroup("");
   };
 
-  const handleGroupChange = (value: string, _option: unknown) => {
+  // ✨ เมื่อ user พิมพ์ — แค่ update display state, ไม่ call API
+  const handlePositionChange = (text: string) => {
+    setInputValue(text);
+    const found = positionOptions.find((o) => o.label === text) ?? null;
+    setSelectedPosition(found);
+    form.setFieldValue("titleLabel", text);
+    form.setFieldValue("title", text);
+    if (found?.parentValue !== REQUIRES_SUBJECT_MARKER) {
+      form.setFieldValue("subjectGroup", undefined);
+      form.setFieldValue("subjects", undefined);
+      setSelectedGroup("");
+    }
+  };
+
+  const handleGroupChange = (value: string) => {
     setSelectedGroup(value);
     form.setFieldValue("subjects", undefined);
   };
@@ -69,19 +109,24 @@ export const BasicInfoSection = () => {
       style={{ borderRadius: 16, border: `1px solid ${token.colorBorderSecondary}` }}
     >
       <Row gutter={[16, 16]}>
-        {/* ✨ ตำแหน่งงาน — ดึงจาก job_position config */}
+        {/* ✨ ตำแหน่งงาน — AutoComplete กรอกเองได้ หรือเลือกจาก config */}
         <Col xs={24} md={16}>
           <Form.Item
             label="ตำแหน่งงาน"
             name="title"
-            rules={[{ required: true, message: "กรุณาเลือกตำแหน่งงาน" }]}
+            rules={[{ required: true, message: "กรุณาระบุตำแหน่งงาน" }]}
           >
-            <Select
+            <AutoComplete
               size="large"
-              placeholder="เลือกตำแหน่งงาน"
-              loading={positionOptions.length === 0}
+              placeholder="เลือกหรือพิมพ์ตำแหน่งงาน เช่น ครู, รปภ., เสมียน"
+              options={autoCompleteOptions}
+              value={inputValue}
               onChange={handlePositionChange}
-              options={selectablePositions.map((o) => ({ label: o.label, value: o.value }))}
+              onSelect={handlePositionSelect}
+              filterOption={(input, option) =>
+                String(option?.label ?? "").toLowerCase().includes(input.toLowerCase())
+              }
+              allowClear
             />
           </Form.Item>
         </Col>

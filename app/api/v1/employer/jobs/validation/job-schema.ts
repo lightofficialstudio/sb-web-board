@@ -7,7 +7,10 @@ export const createJobSchema = z.object({
   vacancy_count: z.number().int().positive().default(1),
   subjects: z.array(z.string()).optional().default([]),
   grades: z.array(z.string()).optional().default([]),
-  salary_type: z.enum(["SPECIFY", "NEGOTIABLE", "RANGE"]).optional().nullable(),
+  salary_type: z
+    .enum(["SPECIFY", "NEGOTIABLE", "RANGE", "NOT_SPECIFIED"])
+    .optional()
+    .nullable(),
   salary_min: z.number().int().nonnegative().optional().nullable(),
   salary_max: z.number().int().nonnegative().optional().nullable(),
   salary_negotiable: z.boolean().default(false),

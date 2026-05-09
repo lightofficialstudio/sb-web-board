@@ -190,7 +190,11 @@ const getIconByValue = (value: string): string => value;
 
 const RiskBadge = ({ risk }: { risk: "low" | "medium" | "high" }) => {
   const { token } = theme.useToken();
-  const COLOR = { low: token.colorSuccess, medium: token.colorWarning, high: token.colorError };
+  const COLOR = {
+    low: token.colorSuccess,
+    medium: token.colorWarning,
+    high: token.colorError,
+  };
   const LABEL = { low: "ต่ำ", medium: "กลาง", high: "สูง" };
   return (
     <span style={{ fontSize: 10, color: COLOR[risk], fontWeight: 600 }}>
@@ -494,7 +498,9 @@ const PermissionMatrix = ({
               disabled={role.isSystem}
             />
             <Flex align="center" gap={6}>
-              <span style={{ color: token.colorPrimary, fontSize: 14 }}>{res.icon}</span>
+              <span style={{ color: token.colorPrimary, fontSize: 14 }}>
+                {res.icon}
+              </span>
               <Flex vertical gap={1}>
                 <Text style={{ fontSize: 13, fontWeight: 500 }}>
                   {res.label}
@@ -567,7 +573,8 @@ const PermissionMatrix = ({
               <Text
                 style={{
                   fontSize: 12,
-                  color: count > 0 ? token.colorPrimary : token.colorTextQuaternary,
+                  color:
+                    count > 0 ? token.colorPrimary : token.colorTextQuaternary,
                 }}
               >
                 {count}/{RESOURCES.length}
@@ -597,10 +604,12 @@ const MemberRolePanel = ({
   members,
   roles,
   userId,
+  delegatedOrgId,
 }: {
   members: OrgMember[];
   roles: OrgRole[];
   userId: string;
+  delegatedOrgId?: string | null;
 }) => {
   const { token } = theme.useToken();
   const { updateMemberRole } = useOrgStore();
@@ -615,7 +624,7 @@ const MemberRolePanel = ({
 
   const handleRoleChange = async (memberId: string, roleId: string) => {
     try {
-      await updateMemberRole(userId, memberId, roleId);
+      await updateMemberRole(userId, memberId, roleId, delegatedOrgId);
       api.success({ message: "อัปเดตบทบาทของสมาชิกแล้ว" });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาด";
@@ -636,7 +645,11 @@ const MemberRolePanel = ({
             <Avatar
               size={36}
               src={m.profile.profileImageUrl}
-              style={{ backgroundColor: token.colorPrimary, fontSize: 13, flexShrink: 0 }}
+              style={{
+                backgroundColor: token.colorPrimary,
+                fontSize: 13,
+                flexShrink: 0,
+              }}
             >
               {displayName.charAt(0)}
             </Avatar>
@@ -769,7 +782,9 @@ const MemberRolePanel = ({
                   {RESOURCES.map((res) => (
                     <>
                       <Flex key={`${res.key}-label`} align="center" gap={4}>
-                        <span style={{ color: token.colorPrimary, fontSize: 12 }}>
+                        <span
+                          style={{ color: token.colorPrimary, fontSize: 12 }}
+                        >
                           {res.icon}
                         </span>
                         <Text style={{ fontSize: 12 }}>{res.label}</Text>
@@ -780,7 +795,10 @@ const MemberRolePanel = ({
                           <Flex key={key} justify="center" align="center">
                             {perms.has(key) ? (
                               <CheckCircleFilled
-                                style={{ color: token.colorSuccess, fontSize: 14 }}
+                                style={{
+                                  color: token.colorSuccess,
+                                  fontSize: 14,
+                                }}
                               />
                             ) : (
                               <CloseCircleOutlined
@@ -829,7 +847,13 @@ const MemberRolePanel = ({
 
 // ─── RBAC Tab (main export) ───────────────────────────────────────────────────
 
-export const RbacTab = ({ userId }: { userId: string }) => {
+export const RbacTab = ({
+  userId,
+  delegatedOrgId,
+}: {
+  userId: string;
+  delegatedOrgId?: string | null;
+}) => {
   const { token } = theme.useToken();
   const [api, contextHolder] = notification.useNotification();
 
@@ -857,9 +881,9 @@ export const RbacTab = ({ userId }: { userId: string }) => {
   const [localPerms, setLocalPerms] = useState<string[]>([]);
 
   useEffect(() => {
-    fetchRoles(userId);
-    fetchMembers(userId);
-  }, [userId]);
+    fetchRoles(userId, delegatedOrgId);
+    fetchMembers(userId, delegatedOrgId);
+  }, [userId, delegatedOrgId]);
 
   // ✨ Set default selected role to admin when roles load
   useEffect(() => {
@@ -891,7 +915,7 @@ export const RbacTab = ({ userId }: { userId: string }) => {
     if (!selectedRole || selectedRole.isSystem) return;
     setSavingPerms(true);
     try {
-      await savePermissions(userId, selectedRoleId, localPerms);
+      await savePermissions(userId, selectedRoleId, localPerms, delegatedOrgId);
       api.success({
         message: `บันทึก Permission ของ "${selectedRole.name}" แล้ว`,
       });
@@ -915,10 +939,10 @@ export const RbacTab = ({ userId }: { userId: string }) => {
     setSavingRole(true);
     try {
       if (editingRole) {
-        await updateRole(userId, editingRole.id, data);
+        await updateRole(userId, editingRole.id, data, delegatedOrgId);
         api.success({ message: `อัปเดต Role "${data.name}" แล้ว` });
       } else {
-        const newRole = await createRole(userId, data);
+        const newRole = await createRole(userId, data, delegatedOrgId);
         setSelectedRoleId(newRole.id);
         api.success({
           message: `สร้าง Role "${newRole.name}" แล้ว — กำหนด Permission ได้เลย`,
@@ -936,7 +960,7 @@ export const RbacTab = ({ userId }: { userId: string }) => {
 
   const handleDeleteRole = async (role: OrgRole) => {
     try {
-      await deleteRole(userId, role.id);
+      await deleteRole(userId, role.id, delegatedOrgId);
       if (selectedRoleId === role.id) {
         const fallback =
           roles.find((r) => r.slug === "admin" && r.id !== role.id) ?? roles[0];
@@ -976,7 +1000,9 @@ export const RbacTab = ({ userId }: { userId: string }) => {
         <Flex align="center" justify="space-between" wrap="wrap" gap={12}>
           <Flex vertical gap={4}>
             <Flex align="center" gap={8}>
-              <LockOutlined style={{ color: token.colorPrimary, fontSize: 18 }} />
+              <LockOutlined
+                style={{ color: token.colorPrimary, fontSize: 18 }}
+              />
               <Title level={5} style={{ margin: 0 }}>
                 Role-Based Access Control (RBAC)
               </Title>
@@ -1032,7 +1058,10 @@ export const RbacTab = ({ userId }: { userId: string }) => {
                 cursor: "pointer",
                 fontSize: 13,
                 fontWeight: section === t.key ? 600 : 400,
-                color: section === t.key ? token.colorPrimary : token.colorTextSecondary,
+                color:
+                  section === t.key
+                    ? token.colorPrimary
+                    : token.colorTextSecondary,
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
@@ -1062,7 +1091,9 @@ export const RbacTab = ({ userId }: { userId: string }) => {
             styles={{ body: { padding: 0 } }}
             title={
               <Flex align="center" gap={6}>
-                <SafetyCertificateOutlined style={{ color: token.colorPrimary }} />
+                <SafetyCertificateOutlined
+                  style={{ color: token.colorPrimary }}
+                />
                 <Text strong style={{ fontSize: 14 }}>
                   Roles ({roles.length})
                 </Text>
@@ -1321,6 +1352,7 @@ export const RbacTab = ({ userId }: { userId: string }) => {
                   members={members}
                   roles={roles}
                   userId={userId}
+                  delegatedOrgId={delegatedOrgId}
                 />
               )}
             </Card>

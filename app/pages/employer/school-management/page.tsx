@@ -2,6 +2,7 @@
 
 import { SummaryCard } from "@/app/components/card/summary-card.component";
 import { useAuthStore } from "@/app/stores/auth-store";
+import { useDelegatedContextStore } from "@/app/stores/delegated-context-store";
 import {
   BankOutlined,
   CheckCircleFilled,
@@ -261,7 +262,11 @@ const EditMemberModal = ({
         <Flex align="center" gap={10}>
           <Avatar
             size={36}
-            style={{ backgroundColor: token.colorPrimary, fontSize: 14, flexShrink: 0 }}
+            style={{
+              backgroundColor: token.colorPrimary,
+              fontSize: 14,
+              flexShrink: 0,
+            }}
           >
             {displayName.charAt(0)}
           </Avatar>
@@ -325,6 +330,9 @@ export default function SchoolManagementPage() {
   const { modal } = App.useApp();
   const { token } = theme.useToken();
   const { user, isAuthenticated } = useAuthStore();
+  // ✨ ดึง delegated context — เป็น source of truth ว่ากำลังจัดการโรงเรียนไหน
+  const delegatedActive = useDelegatedContextStore((s) => s.active);
+  const delegatedOrgId = delegatedActive?.schoolProfileId ?? null;
   const router = useRouter();
   const [api, contextHolder] = notification.useNotification();
 
@@ -367,11 +375,11 @@ export default function SchoolManagementPage() {
       );
       return;
     }
-    // ✨ โหลดข้อมูลจาก API
-    fetchMembers(user.user_id);
-    fetchInvites(user.user_id);
-    fetchRoles(user.user_id);
-  }, [isMounted, isAuthenticated, user?.role]);
+    // ✨ โหลดข้อมูลจาก API (ใช้ delegatedOrgId ถ้ามี delegated context)
+    fetchMembers(user.user_id, delegatedOrgId);
+    fetchInvites(user.user_id, delegatedOrgId);
+    fetchRoles(user.user_id, delegatedOrgId);
+  }, [isMounted, isAuthenticated, user?.role, delegatedOrgId]);
 
   if (!isMounted || !user) return null;
 
@@ -379,7 +387,7 @@ export default function SchoolManagementPage() {
 
   const handleInvite = async (email: string, roleId: string) => {
     try {
-      await inviteMember(user.user_id, email, roleId);
+      await inviteMember(user.user_id, email, roleId, delegatedOrgId);
       setIsInviteOpen(false);
       api.success({ message: `ส่งคำเชิญไปยัง ${email} แล้ว` });
     } catch (err) {
@@ -390,7 +398,7 @@ export default function SchoolManagementPage() {
 
   const handleEditSave = async (memberId: string, roleId: string) => {
     try {
-      await updateMemberRole(user.user_id, memberId, roleId);
+      await updateMemberRole(user.user_id, memberId, roleId, delegatedOrgId);
       setEditMember(null);
       api.success({ message: "อัปเดตบทบาทเรียบร้อยแล้ว" });
     } catch (err) {
@@ -412,7 +420,7 @@ export default function SchoolManagementPage() {
       okButtonProps: { danger: true },
       onOk: async () => {
         try {
-          await removeMember(user.user_id, member.id);
+          await removeMember(user.user_id, member.id, delegatedOrgId);
           api.success({ message: `ลบ ${displayName} ออกจากทีมแล้ว` });
         } catch (err) {
           const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาด";
@@ -430,7 +438,7 @@ export default function SchoolManagementPage() {
       cancelText: "ไม่",
       onOk: async () => {
         try {
-          await revokeInvite(user.user_id, invite.id);
+          await revokeInvite(user.user_id, invite.id, delegatedOrgId);
           api.info({ message: "ยกเลิกคำเชิญแล้ว" });
         } catch (err) {
           const msg = err instanceof Error ? err.message : "เกิดข้อผิดพลาด";
@@ -448,7 +456,7 @@ export default function SchoolManagementPage() {
   };
 
   const handleRefreshInvites = () => {
-    fetchInvites(user.user_id);
+    fetchInvites(user.user_id, delegatedOrgId);
     api.info({ message: "รีเฟรชคำเชิญแล้ว" });
   };
 
@@ -510,7 +518,11 @@ export default function SchoolManagementPage() {
             <Avatar
               size={40}
               src={record.profile.profileImageUrl}
-              style={{ backgroundColor: token.colorPrimary, fontSize: 15, flexShrink: 0 }}
+              style={{
+                backgroundColor: token.colorPrimary,
+                fontSize: 15,
+                flexShrink: 0,
+              }}
             >
               {displayName.charAt(0)}
             </Avatar>
@@ -766,7 +778,9 @@ export default function SchoolManagementPage() {
       label: "จัดการสิทธิ์",
       icon: (
         <KeyOutlined
-          style={{ color: activeTab === "rbac" ? token.colorPrimary : undefined }}
+          style={{
+            color: activeTab === "rbac" ? token.colorPrimary : undefined,
+          }}
         />
       ),
     },
@@ -902,7 +916,9 @@ export default function SchoolManagementPage() {
                 fontSize: 14,
                 fontWeight: activeTab === tab.key ? 600 : 400,
                 color:
-                  activeTab === tab.key ? token.colorPrimary : token.colorTextSecondary,
+                  activeTab === tab.key
+                    ? token.colorPrimary
+                    : token.colorTextSecondary,
                 display: "flex",
                 alignItems: "center",
                 gap: 6,
@@ -1077,7 +1093,9 @@ export default function SchoolManagementPage() {
         )}
 
         {/* ─── Tab: จัดการสิทธิ์ (RBAC) ─────────────────────────────── */}
-        {activeTab === "rbac" && <RbacTab userId={user.user_id} />}
+        {activeTab === "rbac" && (
+          <RbacTab userId={user.user_id} delegatedOrgId={delegatedOrgId} />
+        )}
 
         {/* ─── Tab: ตั้งค่าองค์กร ────────────────────────────────────── */}
         {activeTab === "settings" && (

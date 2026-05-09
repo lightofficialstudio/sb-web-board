@@ -80,21 +80,73 @@ interface OrgState {
   isLoadingRoles: boolean;
 
   // Members
-  fetchMembers: (userId: string) => Promise<void>;
-  inviteMember: (userId: string, email: string, roleId: string) => Promise<void>;
-  updateMemberRole: (userId: string, memberId: string, roleId: string) => Promise<void>;
-  removeMember: (userId: string, memberId: string) => Promise<void>;
+  fetchMembers: (
+    userId: string,
+    delegatedOrgId?: string | null,
+  ) => Promise<void>;
+  inviteMember: (
+    userId: string,
+    email: string,
+    roleId: string,
+    delegatedOrgId?: string | null,
+  ) => Promise<void>;
+  updateMemberRole: (
+    userId: string,
+    memberId: string,
+    roleId: string,
+    delegatedOrgId?: string | null,
+  ) => Promise<void>;
+  removeMember: (
+    userId: string,
+    memberId: string,
+    delegatedOrgId?: string | null,
+  ) => Promise<void>;
 
   // Invites
-  fetchInvites: (userId: string) => Promise<void>;
-  revokeInvite: (userId: string, inviteId: string) => Promise<void>;
+  fetchInvites: (
+    userId: string,
+    delegatedOrgId?: string | null,
+  ) => Promise<void>;
+  revokeInvite: (
+    userId: string,
+    inviteId: string,
+    delegatedOrgId?: string | null,
+  ) => Promise<void>;
 
   // Roles
-  fetchRoles: (userId: string) => Promise<void>;
-  createRole: (userId: string, data: { name: string; description?: string; color?: string; icon_key?: string }) => Promise<OrgRole>;
-  updateRole: (userId: string, roleId: string, data: { name?: string; description?: string; color?: string; icon_key?: string }) => Promise<void>;
-  deleteRole: (userId: string, roleId: string) => Promise<void>;
-  savePermissions: (userId: string, roleId: string, permissions: string[]) => Promise<void>;
+  fetchRoles: (userId: string, delegatedOrgId?: string | null) => Promise<void>;
+  createRole: (
+    userId: string,
+    data: {
+      name: string;
+      description?: string;
+      color?: string;
+      icon_key?: string;
+    },
+    delegatedOrgId?: string | null,
+  ) => Promise<OrgRole>;
+  updateRole: (
+    userId: string,
+    roleId: string,
+    data: {
+      name?: string;
+      description?: string;
+      color?: string;
+      icon_key?: string;
+    },
+    delegatedOrgId?: string | null,
+  ) => Promise<void>;
+  deleteRole: (
+    userId: string,
+    roleId: string,
+    delegatedOrgId?: string | null,
+  ) => Promise<void>;
+  savePermissions: (
+    userId: string,
+    roleId: string,
+    permissions: string[],
+    delegatedOrgId?: string | null,
+  ) => Promise<void>;
 }
 
 export const useOrgStore = create<OrgState>((set, get) => ({
@@ -107,10 +159,10 @@ export const useOrgStore = create<OrgState>((set, get) => ({
 
   // ─── Members ────────────────────────────────────────────────────────────────
 
-  fetchMembers: async (userId) => {
+  fetchMembers: async (userId, delegatedOrgId) => {
     set({ isLoadingMembers: true });
     try {
-      const data = await fetchOrgMembers(userId);
+      const data = await fetchOrgMembers(userId, delegatedOrgId);
       set({ members: Array.isArray(data) ? (data as OrgMember[]) : [] });
     } catch (err) {
       console.error("❌ [org-store] fetchMembers:", err);
@@ -120,14 +172,18 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     }
   },
 
-  inviteMember: async (userId, email, roleId) => {
+  inviteMember: async (userId, email, roleId, delegatedOrgId) => {
     // ✨ เรียก POST /invites ซึ่งจะสร้าง invite + ส่ง email จริง
-    await fetchSendInvite(userId, { email, role_id: roleId });
-    await get().fetchInvites(userId);
+    await fetchSendInvite(userId, { email, role_id: roleId }, delegatedOrgId);
+    await get().fetchInvites(userId, delegatedOrgId);
   },
 
-  updateMemberRole: async (userId, memberId, roleId) => {
-    await fetchUpdateMemberRole(userId, { member_id: memberId, role_id: roleId });
+  updateMemberRole: async (userId, memberId, roleId, delegatedOrgId) => {
+    await fetchUpdateMemberRole(
+      userId,
+      { member_id: memberId, role_id: roleId },
+      delegatedOrgId,
+    );
     // optimistic: update local state
     set((state) => ({
       members: state.members.map((m) => {
@@ -138,17 +194,19 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     }));
   },
 
-  removeMember: async (userId, memberId) => {
-    await fetchRemoveMember(userId, memberId);
-    set((state) => ({ members: state.members.filter((m) => m.id !== memberId) }));
+  removeMember: async (userId, memberId, delegatedOrgId) => {
+    await fetchRemoveMember(userId, memberId, delegatedOrgId);
+    set((state) => ({
+      members: state.members.filter((m) => m.id !== memberId),
+    }));
   },
 
   // ─── Invites ────────────────────────────────────────────────────────────────
 
-  fetchInvites: async (userId) => {
+  fetchInvites: async (userId, delegatedOrgId) => {
     set({ isLoadingInvites: true });
     try {
-      const data = await fetchPendingInvites(userId);
+      const data = await fetchPendingInvites(userId, delegatedOrgId);
       set({ invites: Array.isArray(data) ? (data as OrgInvite[]) : [] });
     } catch (err) {
       console.error("❌ [org-store] fetchInvites:", err);
@@ -158,17 +216,19 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     }
   },
 
-  revokeInvite: async (userId, inviteId) => {
-    await fetchRevokeInvite(userId, inviteId);
-    set((state) => ({ invites: state.invites.filter((i) => i.id !== inviteId) }));
+  revokeInvite: async (userId, inviteId, delegatedOrgId) => {
+    await fetchRevokeInvite(userId, inviteId, delegatedOrgId);
+    set((state) => ({
+      invites: state.invites.filter((i) => i.id !== inviteId),
+    }));
   },
 
   // ─── Roles ──────────────────────────────────────────────────────────────────
 
-  fetchRoles: async (userId) => {
+  fetchRoles: async (userId, delegatedOrgId) => {
     set({ isLoadingRoles: true });
     try {
-      const data = await fetchOrgRoles(userId);
+      const data = await fetchOrgRoles(userId, delegatedOrgId);
       set({ roles: Array.isArray(data) ? (data as OrgRole[]) : [] });
     } catch (err) {
       console.error("❌ [org-store] fetchRoles:", err);
@@ -178,26 +238,40 @@ export const useOrgStore = create<OrgState>((set, get) => ({
     }
   },
 
-  createRole: async (userId, data) => {
-    const newRole = await fetchCreateRole(userId, data) as OrgRole;
+  createRole: async (userId, data, delegatedOrgId) => {
+    const newRole = (await fetchCreateRole(
+      userId,
+      data,
+      delegatedOrgId,
+    )) as OrgRole;
     set((state) => ({ roles: [...state.roles, newRole] }));
     return newRole;
   },
 
-  updateRole: async (userId, roleId, data) => {
-    const updated = await fetchUpdateRole(userId, roleId, data) as OrgRole;
+  updateRole: async (userId, roleId, data, delegatedOrgId) => {
+    const updated = (await fetchUpdateRole(
+      userId,
+      roleId,
+      data,
+      delegatedOrgId,
+    )) as OrgRole;
     set((state) => ({
       roles: state.roles.map((r) => (r.id === roleId ? updated : r)),
     }));
   },
 
-  deleteRole: async (userId, roleId) => {
-    await fetchDeleteRole(userId, roleId);
+  deleteRole: async (userId, roleId, delegatedOrgId) => {
+    await fetchDeleteRole(userId, roleId, delegatedOrgId);
     set((state) => ({ roles: state.roles.filter((r) => r.id !== roleId) }));
   },
 
-  savePermissions: async (userId, roleId, permissions) => {
-    const updated = await fetchUpdateRolePermissions(userId, roleId, permissions) as OrgRole;
+  savePermissions: async (userId, roleId, permissions, delegatedOrgId) => {
+    const updated = (await fetchUpdateRolePermissions(
+      userId,
+      roleId,
+      permissions,
+      delegatedOrgId,
+    )) as OrgRole;
     set((state) => ({
       roles: state.roles.map((r) => (r.id === roleId ? updated : r)),
     }));

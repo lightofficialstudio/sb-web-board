@@ -31,6 +31,31 @@ const getProfileId = async (userId: string): Promise<string> => {
   return profile.id;
 };
 
+// ✨ resolveOrgId — รองรับ Delegated Context
+// ถ้า delegatedOrgId ระบุมา ให้ตรวจสอบว่า userId มีสิทธิ์ในองค์กรนั้นจริง แล้วใช้ค่านั้น
+export const resolveOrgId = async (
+  userId: string,
+  requiredPermission: string,
+  delegatedOrgId?: string | null,
+): Promise<string> => {
+  if (!delegatedOrgId) return getOrgId(userId);
+
+  const profileId = await getProfileId(userId);
+
+  const member = await prisma.orgMember.findFirst({
+    where: {
+      profileId,
+      orgId: delegatedOrgId,
+      status: "ACTIVE",
+      role: { permissions: { some: { permissionKey: requiredPermission } } },
+    },
+    select: { id: true },
+  });
+
+  if (!member) throw new Error("DELEGATED_PERMISSION_DENIED");
+  return delegatedOrgId;
+};
+
 // ─── System Roles Seed ───────────────────────────────────────────────────────
 
 const SYSTEM_ROLES = [
@@ -129,8 +154,8 @@ export const ensureSystemRolesService = async (orgId: string) => {
 // ─── Org Members ─────────────────────────────────────────────────────────────
 
 // ✨ ดึงสมาชิกทั้งหมดขององค์กร
-export const getOrgMembersService = async (userId: string) => {
-  const orgId = await getOrgId(userId);
+export const getOrgMembersService = async (userId: string, delegatedOrgId?: string | null) => {
+  const orgId = await resolveOrgId(userId, "members:view", delegatedOrgId);
   await ensureSystemRolesService(orgId);
 
   return await prisma.orgMember.findMany({
@@ -154,8 +179,8 @@ export const getOrgMembersService = async (userId: string) => {
 };
 
 // ✨ ดึงคำเชิญที่รอการตอบรับ
-export const getPendingInvitesService = async (userId: string) => {
-  const orgId = await getOrgId(userId);
+export const getPendingInvitesService = async (userId: string, delegatedOrgId?: string | null) => {
+  const orgId = await resolveOrgId(userId, "members:view", delegatedOrgId);
 
   return await prisma.orgInvite.findMany({
     where: { orgId, status: "PENDING" },
@@ -170,8 +195,9 @@ export const getPendingInvitesService = async (userId: string) => {
 export const inviteMemberService = async (
   userId: string,
   input: InviteMemberInput,
+  delegatedOrgId?: string | null,
 ) => {
-  const orgId = await getOrgId(userId);
+  const orgId = await resolveOrgId(userId, "members:create", delegatedOrgId);
   const inviterProfileId = await getProfileId(userId);
 
   // ตรวจสอบว่า role อยู่ในองค์กรนี้
@@ -215,8 +241,8 @@ export const inviteMemberService = async (
 };
 
 // ✨ ยกเลิกคำเชิญ
-export const revokeInviteService = async (userId: string, inviteId: string) => {
-  const orgId = await getOrgId(userId);
+export const revokeInviteService = async (userId: string, inviteId: string, delegatedOrgId?: string | null) => {
+  const orgId = await resolveOrgId(userId, "members:edit", delegatedOrgId);
 
   const invite = await prisma.orgInvite.findFirst({
     where: { id: inviteId, orgId },
@@ -230,8 +256,8 @@ export const revokeInviteService = async (userId: string, inviteId: string) => {
 };
 
 // ✨ ลบสมาชิกออกจากองค์กร
-export const removeMemberService = async (userId: string, memberId: string) => {
-  const orgId = await getOrgId(userId);
+export const removeMemberService = async (userId: string, memberId: string, delegatedOrgId?: string | null) => {
+  const orgId = await resolveOrgId(userId, "members:delete", delegatedOrgId);
 
   const member = await prisma.orgMember.findFirst({
     where: { id: memberId, orgId },
@@ -247,8 +273,9 @@ export const removeMemberService = async (userId: string, memberId: string) => {
 export const updateMemberRoleService = async (
   userId: string,
   input: UpdateMemberRoleInput,
+  delegatedOrgId?: string | null,
 ) => {
-  const orgId = await getOrgId(userId);
+  const orgId = await resolveOrgId(userId, "members:edit", delegatedOrgId);
 
   const member = await prisma.orgMember.findFirst({
     where: { id: input.member_id, orgId },
@@ -275,8 +302,8 @@ export const updateMemberRoleService = async (
 // ─── RBAC Roles ──────────────────────────────────────────────────────────────
 
 // ✨ ดึง Roles ทั้งหมดขององค์กร (รวม permissions และ member count)
-export const getOrgRolesService = async (userId: string) => {
-  const orgId = await getOrgId(userId);
+export const getOrgRolesService = async (userId: string, delegatedOrgId?: string | null) => {
+  const orgId = await resolveOrgId(userId, "members:view", delegatedOrgId);
   await ensureSystemRolesService(orgId);
 
   return await prisma.orgRole.findMany({
@@ -293,8 +320,9 @@ export const getOrgRolesService = async (userId: string) => {
 export const createRoleService = async (
   userId: string,
   input: CreateRoleInput,
+  delegatedOrgId?: string | null,
 ) => {
-  const orgId = await getOrgId(userId);
+  const orgId = await resolveOrgId(userId, "settings:edit", delegatedOrgId);
 
   const slug = input.name
     .toLowerCase()
@@ -325,8 +353,9 @@ export const updateRoleService = async (
   userId: string,
   roleId: string,
   input: UpdateRoleInput,
+  delegatedOrgId?: string | null,
 ) => {
-  const orgId = await getOrgId(userId);
+  const orgId = await resolveOrgId(userId, "settings:edit", delegatedOrgId);
 
   const role = await prisma.orgRole.findFirst({ where: { id: roleId, orgId } });
   if (!role) throw new Error("ROLE_NOT_FOUND");
@@ -347,8 +376,8 @@ export const updateRoleService = async (
 };
 
 // ✨ ลบ Custom Role
-export const deleteRoleService = async (userId: string, roleId: string) => {
-  const orgId = await getOrgId(userId);
+export const deleteRoleService = async (userId: string, roleId: string, delegatedOrgId?: string | null) => {
+  const orgId = await resolveOrgId(userId, "settings:edit", delegatedOrgId);
 
   const role = await prisma.orgRole.findFirst({ where: { id: roleId, orgId } });
   if (!role) throw new Error("ROLE_NOT_FOUND");
@@ -365,8 +394,9 @@ export const updateRolePermissionsService = async (
   userId: string,
   roleId: string,
   input: UpdatePermissionsInput,
+  delegatedOrgId?: string | null,
 ) => {
-  const orgId = await getOrgId(userId);
+  const orgId = await resolveOrgId(userId, "settings:edit", delegatedOrgId);
 
   const role = await prisma.orgRole.findFirst({ where: { id: roleId, orgId } });
   if (!role) throw new Error("ROLE_NOT_FOUND");

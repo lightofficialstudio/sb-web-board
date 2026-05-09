@@ -6,7 +6,8 @@ export const getNotificationsService = async (userId: string) => {
     where: { userId },
     select: { id: true },
   });
-  if (!profile) throw new Error("PROFILE_NOT_FOUND");
+  // ✨ ถ้าไม่มี Profile (Prisma sync ล้มเหลวตอน signup) — return ว่างเปล่าแทน throw
+  if (!profile) return { notifications: [], unreadCount: 0 };
 
   const [notifications, unreadCount] = await Promise.all([
     prisma.notification.findMany({
@@ -23,12 +24,16 @@ export const getNotificationsService = async (userId: string) => {
 };
 
 // ✨ mark notification เดียวว่าอ่านแล้ว
-export const markReadService = async (userId: string, notificationId: string) => {
+export const markReadService = async (
+  userId: string,
+  notificationId: string,
+) => {
   const profile = await prisma.profile.findUnique({
     where: { userId },
     select: { id: true },
   });
-  if (!profile) throw new Error("PROFILE_NOT_FOUND");
+  // ✨ ถ้าไม่มี Profile — return null แทน throw
+  if (!profile) return null;
 
   return prisma.notification.updateMany({
     where: { id: notificationId, profileId: profile.id },
@@ -42,7 +47,8 @@ export const markAllReadService = async (userId: string) => {
     where: { userId },
     select: { id: true },
   });
-  if (!profile) throw new Error("PROFILE_NOT_FOUND");
+  // ✨ ถ้าไม่มี Profile — return null แทน throw
+  if (!profile) return null;
 
   return prisma.notification.updateMany({
     where: { profileId: profile.id, isRead: false },

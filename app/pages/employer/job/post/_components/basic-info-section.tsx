@@ -61,7 +61,7 @@ export const BasicInfoSection = () => {
             name="subjects"
             rules={[{ required: true, message: "กรุณาเลือกวิชาที่สอน" }]}
           >
-            <Select mode="tags" size="large" placeholder="เลือกหรือพิมพ์วิชาที่สอน" style={{ width: "100%" }}>
+            <Select size="large" placeholder="เลือกวิชาที่สอน" style={{ width: "100%" }}>
               <Option value="ภาษาอังกฤษ">ภาษาอังกฤษ</Option>
               <Option value="คณิตศาสตร์">คณิตศาสตร์</Option>
               <Option value="วิทยาศาสตร์">วิทยาศาสตร์</Option>

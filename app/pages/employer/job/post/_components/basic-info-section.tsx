@@ -188,16 +188,18 @@ export const BasicInfoSection = () => {
           </>
         )}
 
-        <Col span={24}>
-          <Form.Item label="ระดับชั้นที่สอน" name="grades">
-            <Select mode="multiple" size="large" placeholder="เลือกระดับชั้น" style={{ width: "100%" }}>
-              <Select.Option value="อนุบาล">อนุบาล</Select.Option>
-              <Select.Option value="ประถมศึกษา">ประถมศึกษา</Select.Option>
-              <Select.Option value="มัธยมต้น">มัธยมต้น</Select.Option>
-              <Select.Option value="มัธยมปลาย">มัธยมปลาย</Select.Option>
-            </Select>
-          </Form.Item>
-        </Col>
+        {requiresSubject && (
+          <Col span={24}>
+            <Form.Item label="ระดับชั้นที่สอน" name="grades">
+              <Select mode="multiple" size="large" placeholder="เลือกระดับชั้น" style={{ width: "100%" }}>
+                <Select.Option value="อนุบาล">อนุบาล</Select.Option>
+                <Select.Option value="ประถมศึกษา">ประถมศึกษา</Select.Option>
+                <Select.Option value="มัธยมต้น">มัธยมต้น</Select.Option>
+                <Select.Option value="มัธยมปลาย">มัธยมปลาย</Select.Option>
+              </Select>
+            </Form.Item>
+          </Col>
+        )}
       </Row>
     </Card>
   );

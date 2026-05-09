@@ -331,7 +331,7 @@ export function AiAssistantPanel({
               style={{ borderRadius: 10 }}
             />
             <Select
-              placeholder="หมวดหมู่ (ไม่จำเป็น)"
+              placeholder="หมวดหมู่ (ไม่บังคับ)"
               value={category || undefined}
               onChange={setCategory}
               allowClear
@@ -351,7 +351,7 @@ export function AiAssistantPanel({
               />
             )}
             <TextArea
-              placeholder="โครงร่างบทความ (ไม่จำเป็น) เช่น:\n- บทนำ\n- หัวข้อ 1\n- หัวข้อ 2\n- สรุป"
+              placeholder="โครงร่างบทความ (ไม่บังคับ) เช่น:\n- บทนำ\n- หัวข้อ 1\n- หัวข้อ 2\n- สรุป"
               rows={4}
               value={outline}
               onChange={(e) => setOutline(e.target.value)}

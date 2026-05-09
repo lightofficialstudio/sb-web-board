@@ -100,11 +100,14 @@ bunx playwright show-report                      # ดู HTML report
 app/pages/<role>/<page>/
 ├── page.tsx               # Server/Client component หลัก
 ├── _components/           # UI components เฉพาะหน้านี้
-├── _stores/               # Zustand store เฉพาะหน้า (ถ้า state ซับซ้อน)
+├── _state/                # Zustand store เฉพาะหน้า (ส่วนใหญ่ใช้ชื่อนี้)
+├── _stores/               # Zustand store เฉพาะหน้า (employee/* ใช้ชื่อนี้)
 └── _api/                  # Axios API calls ไปยัง /api/v1/...
 ```
 
-- `_stores/` คือ page-level Zustand ที่ไม่ persist — ต่างจาก `app/stores/` (global, persisted)
+- ชื่อโฟลเดอร์ state: admin/*, employer/*, blog, job, landing, signin, signup ใช้ `_state/` — employee/* ใช้ `_stores/`
+- บางหน้า (employer/profile) มีทั้ง `_state/` และ `_stores/` พร้อมกัน
+- `_state/` และ `_stores/` คือ page-level Zustand ที่ไม่ persist — ต่างจาก `app/stores/` (global, persisted)
 - `_api/` รับผิดชอบ Axios calls ทั้งหมด ไม่มี fetch() ใน component
 
 ### API Layer Pattern
@@ -169,6 +172,7 @@ Flow:
 | Path | หน้า |
 |------|------|
 | `/pages/employee/profile` | โปรไฟล์ครู |
+| `/pages/employee/applications` | ใบสมัครของฉัน |
 | `/pages/employee/school` | ค้นหาโรงเรียน |
 | `/pages/employee/account-setting` | ตั้งค่าบัญชี |
 
@@ -223,11 +227,17 @@ POST /api/v1/authenticate/signin     เข้าสู่ระบบ
 
 ### Employee
 ```
-GET  /api/v1/employee/profile/read        ดึงโปรไฟล์ครู
-PUT  /api/v1/employee/profile/update      อัปเดตโปรไฟล์
-GET  /api/v1/employee/applications/read   ดึงใบสมัครของฉัน
-POST /api/v1/employee/applications/create สมัครงาน
-GET  /api/v1/employee/schools/read        ค้นหาโรงเรียน
+GET  /api/v1/employee/profile/read              ดึงโปรไฟล์ครู
+PUT  /api/v1/employee/profile/update            อัปเดตโปรไฟล์
+GET  /api/v1/employee/applications/read         ดึงใบสมัครของฉัน
+POST /api/v1/employee/applications/create       สมัครงาน
+GET  /api/v1/employee/schools/read              ค้นหาโรงเรียน
+GET/POST   /api/v1/employee/educations          การศึกษา (CRUD + /[id])
+GET/POST   /api/v1/employee/licenses            ใบอนุญาต (CRUD + /[id])
+GET/POST   /api/v1/employee/resumes             เรซูเม่ (CRUD + /[id])
+GET/POST   /api/v1/employee/work-experiences    ประสบการณ์ทำงาน (CRUD + /[id])
+PUT        /api/v1/employee/work-location/update สถานที่ทำงาน
+POST       /api/v1/employee/account-setting/change-password เปลี่ยนรหัสผ่าน
 ```
 
 ### Employer
@@ -287,6 +297,23 @@ GET  /api/v1/admin/packages/plans                 รายการ Plan
 GET  /api/v1/admin/packages/plans/[plan]          Plan รายละเอียด
 POST /api/v1/admin/packages/bulk-update           แก้ไขหลาย Plan
 GET  /api/v1/admin/packages/school-detail         รายละเอียดโรงเรียน + Package
+```
+
+### Employer (เพิ่มเติม)
+```
+GET  /api/v1/employer/package/read                ดึง Package plan ของโรงเรียน
+```
+
+### Admin (เพิ่มเติม)
+```
+GET  /api/v1/admin/dashboard                      สถิติ Dashboard
+GET  /api/v1/admin/site-settings                  ดึงการตั้งค่าระบบ (SiteSetting)
+PATCH /api/v1/admin/site-settings                 แก้ไขการตั้งค่าระบบ
+```
+
+### System
+```
+GET  /api/v1/system/maintenance                   ตรวจสอบ maintenance mode (public, ใช้โดย middleware)
 ```
 
 ### Notifications & Config (Public/Auth)

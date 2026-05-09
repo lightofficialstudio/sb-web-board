@@ -25,7 +25,7 @@ export function LandingLayoutClient({ children }: { children: ReactNode }) {
 
   return (
     <ConfigProvider
-      locale={thTH}
+      locale={{ ...thTH, Form: { ...thTH.Form, optional: "(ไม่บังคับ)" } }}
       theme={themeConfig}
       componentSize="middle"
       input={{ autoComplete: "off" }}

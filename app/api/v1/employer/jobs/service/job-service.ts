@@ -14,9 +14,54 @@ const getSchoolProfileId = async (userId: string): Promise<string> => {
   return profile.schoolProfile.id;
 };
 
+// ✨ resolveSchoolProfileId — รองรับ Delegated Context
+// ถ้า delegatedSchoolProfileId ระบุมา ให้ตรวจสอบ permission ก่อน แล้วใช้ค่านั้นแทน
+export const resolveSchoolProfileId = async (
+  userId: string,
+  requiredPermission: string,
+  delegatedSchoolProfileId?: string | null,
+): Promise<string> => {
+  if (!delegatedSchoolProfileId) {
+    // ✨ ใช้ schoolProfile ของตัวเอง (ปกติ)
+    return getSchoolProfileId(userId);
+  }
+
+  // ✨ Delegated mode — ตรวจสอบว่า userId มี permission สำหรับโรงเรียนนั้นจริง
+  const profile = await prisma.profile.findUnique({
+    where: { userId },
+    select: { id: true },
+  });
+  if (!profile) throw new Error("PROFILE_NOT_FOUND");
+
+  const member = await prisma.orgMember.findFirst({
+    where: {
+      profileId: profile.id,
+      orgId: delegatedSchoolProfileId, // orgId = schoolProfileId ในระบบนี้
+      status: "ACTIVE",
+      role: {
+        permissions: {
+          some: { permissionKey: requiredPermission },
+        },
+      },
+    },
+    select: { id: true },
+  });
+
+  if (!member) throw new Error("DELEGATED_PERMISSION_DENIED");
+
+  return delegatedSchoolProfileId;
+};
+
 // ✨ ดึงข้อมูลประกาศงานทั้งหมดของโรงเรียน โดยใช้ userId (รวม application count)
-export const getJobsByUserService = async (userId: string) => {
-  const schoolProfileId = await getSchoolProfileId(userId);
+export const getJobsByUserService = async (
+  userId: string,
+  delegatedSchoolProfileId?: string | null,
+) => {
+  const schoolProfileId = await resolveSchoolProfileId(
+    userId,
+    "jobs:read",
+    delegatedSchoolProfileId,
+  );
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   return await prisma.job.findMany({
@@ -54,8 +99,13 @@ export const getJobByIdService = async (userId: string, jobId: string) => {
 export const createJobService = async (
   userId: string,
   payload: CreateJobInput,
+  delegatedSchoolProfileId?: string | null,
 ) => {
-  const schoolProfileId = await getSchoolProfileId(userId);
+  const schoolProfileId = await resolveSchoolProfileId(
+    userId,
+    "jobs:create",
+    delegatedSchoolProfileId,
+  );
 
   return await prisma.$transaction(async (tx) => {
     // คำนวณ deadline จาก deadline_days

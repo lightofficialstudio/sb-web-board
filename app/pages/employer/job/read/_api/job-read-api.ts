@@ -8,10 +8,18 @@ interface ApiResponse<T> {
   data: T;
 }
 
-// ดึงรายการประกาศงานทั้งหมดของ Employer (รวม application count)
-export const fetchJobList = async (userId: string) => {
+// ✨ ดึงรายการประกาศงานทั้งหมดของ Employer (รวม application count)
+// ถ้า delegatedSchoolProfileId ระบุมา → ดึงงานของโรงเรียนที่ถูก delegate แทน
+export const fetchJobList = async (
+  userId: string,
+  delegatedSchoolProfileId?: string | null,
+) => {
+  const params = new URLSearchParams({ user_id: userId });
+  if (delegatedSchoolProfileId) {
+    params.set("school_profile_id", delegatedSchoolProfileId);
+  }
   const { data } = await axios.get<ApiResponse<unknown[]>>(
-    `/api/v1/employer/jobs/read?user_id=${userId}`,
+    `/api/v1/employer/jobs/read?${params.toString()}`,
   );
   return data.data ?? [];
 };

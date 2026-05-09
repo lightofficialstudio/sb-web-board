@@ -9,6 +9,10 @@ import { getJobQuerySchema } from "../validation/job-schema";
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    // ✨ รับ school_profile_id เมื่อ EMPLOYER ทำงานแทนโรงเรียนอื่น (delegated)
+    const delegatedSchoolProfileId =
+      searchParams.get("school_profile_id") ?? null;
+
     const query = {
       user_id: searchParams.get("user_id") ?? "",
       job_id: searchParams.get("job_id") ?? undefined,
@@ -51,7 +55,10 @@ export async function GET(request: Request) {
       });
     }
 
-    const jobs = await getJobsByUserService(parsed.data.user_id);
+    const jobs = await getJobsByUserService(
+      parsed.data.user_id,
+      delegatedSchoolProfileId,
+    );
     return Response.json({
       status_code: 200,
       message_th: "ดึงข้อมูลสำเร็จ",
@@ -69,6 +76,17 @@ export async function GET(request: Request) {
           data: null,
         },
         { status: 404 },
+      );
+    }
+    if (message === "DELEGATED_PERMISSION_DENIED") {
+      return Response.json(
+        {
+          status_code: 403,
+          message_th: "ไม่มีสิทธิ์เข้าถึงข้อมูลของโรงเรียนนี้",
+          message_en: "Permission denied for delegated school",
+          data: null,
+        },
+        { status: 403 },
       );
     }
     console.error("❌ [jobs/read]", err);

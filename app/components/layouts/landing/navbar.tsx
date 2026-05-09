@@ -2,10 +2,12 @@
 
 import { useTheme } from "@/app/contexts/theme-context";
 import { useAuthStore } from "@/app/stores/auth-store";
+import { useDelegatedContextStore } from "@/app/stores/delegated-context-store";
 import {
   BellOutlined,
   CaretDownOutlined,
   CheckOutlined,
+  ExclamationCircleOutlined,
   KeyOutlined,
   LogoutOutlined,
   MoonOutlined,
@@ -45,7 +47,11 @@ interface DelegatedSchool {
     province: string;
     logoUrl?: string | null;
   };
-  role: { name: string; color: string };
+  role: {
+    name: string;
+    color: string;
+    permissions: { permissionKey: string }[];
+  };
 }
 
 // ✨ รูปแบบ notification จาก API
@@ -77,9 +83,12 @@ export default function Navbar() {
   const { toggleTheme, mode } = useTheme();
   const { token } = theme.useToken();
   const isDark = mode === "dark";
+  const { active: delegatedActive, exitDelegation } = useDelegatedContextStore();
 
   // ✨ [ตรวจสอบ scroll position เพื่อเปลี่ยนเป็น Floating Pill Navbar]
   const [scrolled, setScrolled] = useState(false);
+  // ✨ [Modal แจ้งเตือนให้ EMPLOYER สร้างโปรไฟล์โรงเรียนก่อน]
+  const [showProfileModal, setShowProfileModal] = useState(false);
   // ✨ [Delegated schools จาก DB]
   const [delegatedSchools, setDelegatedSchools] = useState<DelegatedSchool[]>(
     [],
@@ -90,15 +99,25 @@ export default function Navbar() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [previewNotif, setPreviewNotif] = useState<AppNotification | null>(null);
 
+  // ✨ ตรวจสอบว่า EMPLOYER มี SchoolProfile แล้วหรือยัง ก่อนเข้าหน้าที่ต้องการ school data
+  const handleEmployerNavClick = (href: string) => (e: React.MouseEvent) => {
+    if (user?.role === "EMPLOYER" && !user.school_name) {
+      e.preventDefault();
+      setShowProfileModal(true);
+      return;
+    }
+    router.push(href);
+  };
+
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 60);
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // ✨ ดึง delegated access เฉพาะ EMPLOYEE — EMPLOYER เจ้าของไม่มี delegated
+  // ✨ ดึง delegated access เฉพาะ EMPLOYER — EMPLOYEE ไม่มีสิทธิ์ Delegate
   useEffect(() => {
-    if (!user?.user_id || user.role === "EMPLOYER") return;
+    if (!user?.user_id || user.role !== "EMPLOYER") return;
     axios
       .get(`/api/v1/employer/organization/delegated?user_id=${user.user_id}`)
       .then((res) => {
@@ -450,7 +469,20 @@ export default function Navbar() {
             </Flex>
           </Flex>
         ),
-        onClick: () => router.push(`/pages/employer/job/read`),
+        onClick: () => {
+          // ✨ บันทึก delegated context → redirect ไปหน้า job/read ของโรงเรียนนั้น
+          const { enterDelegation } = useDelegatedContextStore.getState();
+          enterDelegation({
+            orgMemberId: item.id,
+            schoolProfileId: item.schoolProfile.id,
+            schoolName: item.schoolProfile.schoolName,
+            schoolLogoUrl: item.schoolProfile.logoUrl,
+            roleName: item.role.name,
+            roleColor: item.role.color,
+            permissions: item.role.permissions.map((p) => p.permissionKey),
+          });
+          router.push("/pages/employer/job/read");
+        },
       })),
     },
     { type: "divider" as const },
@@ -468,6 +500,44 @@ export default function Navbar() {
 
   return (
     <>
+    {/* ── Modal บังคับสร้างโปรไฟล์โรงเรียนก่อน ── */}
+    <Modal
+      open={showProfileModal}
+      onCancel={() => setShowProfileModal(false)}
+      footer={[
+        <Button key="cancel" onClick={() => setShowProfileModal(false)}>
+          ยกเลิก
+        </Button>,
+        <Button
+          key="go"
+          type="primary"
+          onClick={() => {
+            setShowProfileModal(false);
+            router.push("/pages/employer/profile");
+          }}
+        >
+          ไปตั้งค่าโปรไฟล์โรงเรียน
+        </Button>,
+      ]}
+      centered
+      width={420}
+      title={
+        <Flex align="center" gap={10}>
+          <ExclamationCircleOutlined style={{ color: "#faad14", fontSize: 20 }} />
+          <span>ยังไม่ได้ตั้งค่าโปรไฟล์โรงเรียน</span>
+        </Flex>
+      }
+    >
+      <Flex vertical gap={8} style={{ padding: "8px 0" }}>
+        <Typography.Text>
+          กรุณาตั้งค่าโปรไฟล์โรงเรียนให้ครบถ้วนก่อน จึงจะสามารถลงประกาศงานและจัดการงานได้
+        </Typography.Text>
+        <Typography.Text type="secondary" style={{ fontSize: 13 }}>
+          ระบบต้องการข้อมูลพื้นฐานของโรงเรียน เช่น ชื่อโรงเรียน จังหวัด เพื่อแสดงในประกาศงาน
+        </Typography.Text>
+      </Flex>
+    </Modal>
+
     {/* ── Notification Preview Modal ── */}
     <Modal
       open={!!previewNotif}
@@ -532,11 +602,55 @@ export default function Navbar() {
       )}
     </Modal>
 
+    {/* ✨ [Delegated Context Banner — แสดงเมื่อกำลังทำงานแทนโรงเรียนอื่น] */}
+    {delegatedActive && (
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1001,
+          background: `linear-gradient(90deg, #f59e0b, #fbbf24)`,
+          padding: "6px 24px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <Flex align="center" gap={8}>
+          <SwapOutlined style={{ color: "#fff", fontSize: 14 }} />
+          <Text style={{ color: "#fff", fontWeight: 600, fontSize: 13 }}>
+            กำลังทำงานในฐานะ{" "}
+            <span style={{ fontWeight: 700 }}>{delegatedActive.roleName}</span>
+            {" "}ของ{" "}
+            <span style={{ fontWeight: 700 }}>{delegatedActive.schoolName}</span>
+          </Text>
+        </Flex>
+        <Button
+          size="small"
+          onClick={() => {
+            exitDelegation();
+            router.push("/pages/employer/delegated-access");
+          }}
+          style={{
+            background: "rgba(255,255,255,0.25)",
+            border: "1px solid rgba(255,255,255,0.5)",
+            color: "#fff",
+            fontSize: 12,
+            height: 26,
+          }}
+        >
+          ออกจากการเข้าถึง
+        </Button>
+      </div>
+    )}
+
     {/* ✨ [Outer wrapper — fixed full-width, จัด layout ให้ pill ลอยตรงกลาง] */}
     <div
       style={{
         position: "fixed",
-        top: 0,
+        top: delegatedActive ? 36 : 0,
         left: 0,
         right: 0,
         zIndex: 1000,
@@ -716,9 +830,10 @@ export default function Navbar() {
 
           {user && user.role === "EMPLOYER" && (
             <>
-              <Link
+              <a
                 href="/pages/employer/job/read"
                 style={{ textDecoration: "none" }}
+                onClick={handleEmployerNavClick("/pages/employer/job/read")}
               >
                 <Text
                   strong
@@ -726,10 +841,11 @@ export default function Navbar() {
                 >
                   งานของฉัน
                 </Text>
-              </Link>
-              <Link
+              </a>
+              <a
                 href="/pages/employer/job/post"
                 style={{ textDecoration: "none" }}
+                onClick={handleEmployerNavClick("/pages/employer/job/post")}
               >
                 <Text
                   strong
@@ -737,7 +853,7 @@ export default function Navbar() {
                 >
                   ประกาศงาน
                 </Text>
-              </Link>
+              </a>
               <Link
                 href="/pages/employer/school-management"
                 style={{ textDecoration: "none" }}

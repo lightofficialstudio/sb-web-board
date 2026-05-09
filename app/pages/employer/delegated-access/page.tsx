@@ -47,6 +47,7 @@ import {
   theme,
 } from "antd";
 import Link from "next/link";
+import { useDelegatedContextStore } from "@/app/stores/delegated-context-store";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import type { DelegatedAccess } from "./_state/delegated-store";
@@ -479,6 +480,7 @@ export default function DelegatedAccessPage() {
   const [notifApi, contextHolder] = notification.useNotification();
 
   const { accesses, isLoading, fetchAccesses } = useDelegatedStore();
+  const { enterDelegation } = useDelegatedContextStore();
 
   const [isMounted, setIsMounted] = useState(false);
   const [filterStatus, setFilterStatus] = useState<
@@ -545,11 +547,20 @@ export default function DelegatedAccessPage() {
       okText: "เข้าถึงเลย",
       cancelText: "ยกเลิก",
       onOk: () => {
+        // ✨ บันทึก delegated context ลง persisted store ก่อน redirect
+        enterDelegation({
+          orgMemberId: access.id,
+          schoolProfileId: access.schoolProfile.id,
+          schoolName: access.schoolProfile.schoolName,
+          schoolLogoUrl: access.schoolProfile.logoUrl,
+          roleName: access.role.name,
+          roleColor: access.role.color,
+          permissions: access.role.permissions.map((p) => p.permissionKey),
+        });
         notifApi.success({
           message: `เข้าถึง ${access.schoolProfile.schoolName} แล้ว`,
           description: `คุณกำลังทำงานในฐานะ ${access.role.name}`,
         });
-        // TODO: set delegated context store → switch school context
         router.push("/pages/employer/job/read");
       },
     });

@@ -2,6 +2,7 @@
 
 import { useTheme } from "@/app/contexts/theme-context";
 import { useAuthStore } from "@/app/stores/auth-store";
+import { useDelegatedContextStore } from "@/app/stores/delegated-context-store";
 import { PlusOutlined, TeamOutlined } from "@ant-design/icons";
 import {
   Badge,
@@ -35,15 +36,16 @@ export default function MyJobsPage() {
   const { openNewApplicantsDrawer } = useApplicantDrawerStore();
   const { token } = theme.useToken();
   const { user } = useAuthStore();
+  const { active: delegatedActive } = useDelegatedContextStore();
   const totalNewApplicants = jobs.reduce((sum, j) => sum + j.newApplicants, 0);
 
-  // ✨ โหลดข้อมูลงานและ pipeline จาก API จริงเมื่อ user พร้อม
+  // ✨ โหลดข้อมูลงานและ pipeline — ถ้ามี delegated context ให้ดึงงานของโรงเรียนนั้นแทน
   useEffect(() => {
     if (user?.user_id) {
-      fetchJobs(user.user_id);
+      fetchJobs(user.user_id, delegatedActive?.schoolProfileId);
       fetchPipelineData(user.user_id);
     }
-  }, [user?.user_id, fetchJobs, fetchPipelineData]);
+  }, [user?.user_id, delegatedActive?.schoolProfileId, fetchJobs, fetchPipelineData]);
 
   return (
     <Layout

@@ -19,6 +19,10 @@ export async function POST(request: Request) {
       );
     }
 
+    // ✨ รับ delegated_school_profile_id เมื่อ EMPLOYER ทำงานแทนโรงเรียนอื่น
+    const delegatedSchoolProfileId =
+      searchParams.get("school_profile_id") ?? null;
+
     const body = await request.json();
     const parsed = createJobSchema.safeParse(body);
     if (!parsed.success) {
@@ -33,7 +37,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const job = await createJobService(userId, parsed.data);
+    const job = await createJobService(userId, parsed.data, delegatedSchoolProfileId);
 
     return Response.json(
       {
@@ -55,6 +59,17 @@ export async function POST(request: Request) {
           data: null,
         },
         { status: 404 },
+      );
+    }
+    if (message === "DELEGATED_PERMISSION_DENIED") {
+      return Response.json(
+        {
+          status_code: 403,
+          message_th: "ไม่มีสิทธิ์สร้างประกาศงานสำหรับโรงเรียนนี้",
+          message_en: "Permission denied for delegated school",
+          data: null,
+        },
+        { status: 403 },
       );
     }
     console.error("❌ [jobs/create]", err);

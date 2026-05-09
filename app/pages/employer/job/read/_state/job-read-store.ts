@@ -102,7 +102,7 @@ interface JobReadState {
   setSearchKeyword: (keyword: string) => void;
   setActiveTab: (tab: string) => void;
   setLoading: (loading: boolean) => void;
-  fetchJobs: (userId: string) => Promise<void>;
+  fetchJobs: (userId: string, delegatedSchoolProfileId?: string | null) => Promise<void>;
   fetchPipelineData: (userId: string) => Promise<void>;
   closeJob: (userId: string, jobId: string) => Promise<void>;
 }
@@ -120,10 +120,11 @@ export const useJobReadStore = create<JobReadState>((set, get) => ({
   setLoading: (isLoading) => set({ isLoading }),
 
   // ✨ โหลดรายการประกาศงานจาก API จริง
-  fetchJobs: async (userId: string) => {
+  // delegatedSchoolProfileId: ระบุเมื่อ EMPLOYER ทำงานแทนโรงเรียนอื่น
+  fetchJobs: async (userId: string, delegatedSchoolProfileId?: string | null) => {
     set({ isLoading: true });
     try {
-      const rawList = await fetchJobList(userId);
+      const rawList = await fetchJobList(userId, delegatedSchoolProfileId);
       const jobs = (rawList as Record<string, unknown>[]).map(mapDbJobToRecord);
       set({ jobs });
     } catch (err) {

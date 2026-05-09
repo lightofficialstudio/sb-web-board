@@ -30,7 +30,7 @@ import {
   theme,
 } from "antd";
 import axios from "axios";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAdminBlogStore } from "../_state/blog-store";
 import { AiAssistantPanel } from "./ai-assistant-panel";
 import { SeoCheckerPanel } from "./seo-checker-panel";
@@ -47,15 +47,232 @@ const CATEGORIES = [
   "ทั่วไป",
 ];
 
-// ✨ auto-generate slug จาก title
+// ✨ auto-generate slug จาก title — รองรับภาษาไทย + ASCII URL-safe
 const toSlug = (text: string) =>
   text
     .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/[^a-z0-9\u0E00-\u0E7F\s-]/g, "") // ✨ เก็บอักษรไทย + ASCII URL chars
     .trim()
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
-    .slice(0, 100);
+    .slice(0, 300);
+
+// ✨ type สำหรับ showModal callback ที่ส่งมาจาก store
+type ShowModalFn = (opts: {
+  type: "success" | "error" | "confirm" | "delete";
+  title: string;
+  description?: string;
+  errorDetails?: unknown;
+}) => void;
+
+// ─── HtmlEditor — Custom Form Control ───────────────────────────────────────
+// ✨ รับ value/onChange จาก Form.Item โดยตรง (Ant Design custom field pattern)
+interface HtmlEditorProps {
+  value?: string;
+  onChange?: (val: string) => void;
+  authorId?: string;
+  showModal?: ShowModalFn;
+}
+
+const HtmlEditor: React.FC<HtmlEditorProps> = ({
+  value = "",
+  onChange,
+  authorId,
+  showModal,
+}) => {
+  const { token } = theme.useToken();
+  const [tab, setTab] = useState<"edit" | "preview">("edit");
+  const [imgLoading, setImgLoading] = useState(false);
+  // ✨ ติดตาม cursor position ใน textarea เพื่อแทรก HTML ณ ตำแหน่งที่ถูกต้อง
+  const cursorPos = useRef({ start: 0, end: 0 });
+
+  const trackCursor: React.ReactEventHandler<HTMLTextAreaElement> = (e) => {
+    const ta = e.currentTarget;
+    cursorPos.current = { start: ta.selectionStart, end: ta.selectionEnd };
+  };
+
+  // ✨ แทรก HTML snippet ณ cursor — รองรับ selected text เป็น inner content
+  const insert = (before: string, after = "", placeholder = "ข้อความ") => {
+    const { start, end } = cursorPos.current;
+    const selected = value.slice(start, end);
+    const html = `${before}${selected || placeholder}${after}`;
+    onChange?.(value.slice(0, start) + html + value.slice(end));
+  };
+
+  // ✨ Upload รูปภาพในบทความ → บักเก็ต blog-images
+  const handleImgUpload = async (file: File) => {
+    if (!authorId) return;
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!allowed.includes(file.type)) {
+      showModal?.({
+        type: "error",
+        title: "ประเภทไฟล์ไม่รองรับ",
+        description: "รองรับ JPEG, PNG, WebP, GIF",
+      });
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showModal?.({
+        type: "error",
+        title: "ไฟล์ใหญ่เกินไป",
+        description: "ขนาดสูงสุด 10 MB",
+      });
+      return;
+    }
+    setImgLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("bucket", "blog-images");
+      fd.append("user_id", authorId);
+      const res = await axios.post("/api/v1/storage/upload", fd, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const url = res.data.data.url as string;
+      // ✨ แทรก img tag ณ cursor position
+      const { start } = cursorPos.current;
+      const html = `<img src="${url}" alt="รูปภาพ" style="max-width:100%;border-radius:8px;" />`;
+      onChange?.(value.slice(0, start) + html + value.slice(start));
+    } catch {
+      showModal?.({
+        type: "error",
+        title: "อัปโหลดรูปไม่สำเร็จ",
+        description: "กรุณาลองใหม่อีกครั้ง",
+      });
+    } finally {
+      setImgLoading(false);
+    }
+  };
+
+  // ✨ ปุ่ม toolbar สำหรับแทรก HTML tag พื้นฐาน
+  const TOOLBAR = [
+    { label: "B", before: "<strong>", after: "</strong>" },
+    { label: "I", before: "<em>", after: "</em>" },
+    { label: "H2", before: "<h2>", after: "</h2>" },
+    { label: "H3", before: "<h3>", after: "</h3>" },
+    { label: "P", before: "<p>", after: "</p>" },
+    {
+      label: "UL",
+      before: "<ul>\n  <li>",
+      after: "</li>\n</ul>",
+      placeholder: "รายการ",
+    },
+    {
+      label: "OL",
+      before: "<ol>\n  <li>",
+      after: "</li>\n</ol>",
+      placeholder: "รายการ",
+    },
+    { label: "Link", before: '<a href="URL">', after: "</a>" },
+    { label: "Code", before: "<code>", after: "</code>" },
+  ];
+
+  return (
+    <Flex vertical gap={0}>
+      {/* ✨ Toggle Edit / Preview */}
+      <Flex align="center" justify="flex-end" style={{ marginBottom: 6 }}>
+        <Segmented
+          size="small"
+          value={tab}
+          onChange={(v) => setTab(v as "edit" | "preview")}
+          options={[
+            { value: "edit", label: "✏️ แก้ไข HTML" },
+            { value: "preview", label: "👁️ ดูตัวอย่าง" },
+          ]}
+        />
+      </Flex>
+
+      {tab === "edit" ? (
+        <>
+          {/* ✨ HTML Toolbar */}
+          <Flex
+            wrap="wrap"
+            align="center"
+            gap={4}
+            style={{
+              padding: "6px 10px",
+              background: token.colorFillSecondary,
+              border: `1px solid ${token.colorBorder}`,
+              borderBottom: "none",
+              borderRadius: "10px 10px 0 0",
+            }}
+          >
+            {TOOLBAR.map((t) => (
+              <Button
+                key={t.label}
+                size="small"
+                style={{
+                  fontFamily: "monospace",
+                  fontWeight: t.label === "B" ? 700 : 400,
+                }}
+                onClick={() => insert(t.before, t.after, t.placeholder)}
+              >
+                {t.label}
+              </Button>
+            ))}
+            <Divider type="vertical" style={{ margin: "0 2px", height: 20 }} />
+            {/* ✨ ปุ่มแทรกรูปภาพในเนื้อหาบทความ */}
+            <Upload
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              showUploadList={false}
+              beforeUpload={(file) => {
+                handleImgUpload(file);
+                return false;
+              }}
+              disabled={imgLoading || !authorId}
+            >
+              <Button
+                size="small"
+                icon={<PictureOutlined />}
+                loading={imgLoading}
+                disabled={!authorId}
+              >
+                {imgLoading ? "กำลังอัปโหลด..." : "แทรกรูป"}
+              </Button>
+            </Upload>
+          </Flex>
+
+          {/* ✨ HTML TextArea */}
+          <TextArea
+            value={value}
+            onChange={(e) => {
+              cursorPos.current = {
+                start: e.target.selectionStart,
+                end: e.target.selectionEnd,
+              };
+              onChange?.(e.target.value);
+            }}
+            onSelect={trackCursor}
+            onKeyUp={trackCursor}
+            onMouseUp={trackCursor}
+            rows={16}
+            placeholder={`<h2>หัวข้อหลัก</h2>\n<p>เนื้อหาย่อหน้าแรก...</p>\n\n<h3>หัวข้อรอง</h3>\n<ul>\n  <li>ประเด็นที่ 1</li>\n  <li>ประเด็นที่ 2</li>\n</ul>`}
+            style={{
+              borderRadius: "0 0 10px 10px",
+              fontFamily: "monospace",
+              fontSize: 13,
+            }}
+          />
+        </>
+      ) : (
+        /* ✨ HTML Preview — render HTML ตรงๆ เหมือนหน้า blog จริง */
+        <div
+          dangerouslySetInnerHTML={{ __html: value }}
+          style={{
+            minHeight: 400,
+            padding: "16px 20px",
+            border: `1px solid ${token.colorBorder}`,
+            borderRadius: 10,
+            overflow: "auto",
+            background: token.colorBgContainer,
+            lineHeight: 1.8,
+            fontSize: 15,
+          }}
+        />
+      )}
+    </Flex>
+  );
+};
 
 export const BlogEditorDrawer: React.FC<{ authorId?: string }> = ({
   authorId,
@@ -311,8 +528,10 @@ export const BlogEditorDrawer: React.FC<{ authorId?: string }> = ({
               rules={[
                 { required: true, message: "กรุณาระบุ slug" },
                 {
-                  pattern: /^[a-z0-9-]+$/,
-                  message: "slug ต้องเป็น lowercase a-z, 0-9, และ - เท่านั้น",
+                  // ✨ รองรับภาษาไทย + ASCII URL-safe chars
+                  pattern: /^[a-z0-9\u0E00-\u0E7F-]+$/,
+                  message:
+                    "slug ต้องเป็น a-z, 0-9, -, หรือตัวอักษรภาษาไทยเท่านั้น",
                 },
               ]}
             >
@@ -515,36 +734,13 @@ export const BlogEditorDrawer: React.FC<{ authorId?: string }> = ({
               />
             </Form.Item>
 
+            {/* ✨ Content editor — HTML พร้อม toolbar + preview + image upload */}
             <Form.Item
               name="content"
-              label={
-                <Flex
-                  align="center"
-                  justify="space-between"
-                  style={{ width: "100%" }}
-                >
-                  <span>เนื้อหาบทความ</span>
-                  <Tooltip title="รองรับ Markdown — **bold**, *italic*, ## หัวข้อ, - รายการ">
-                    <Tag
-                      color="processing"
-                      style={{ cursor: "help", fontSize: 11 }}
-                    >
-                      Markdown
-                    </Tag>
-                  </Tooltip>
-                </Flex>
-              }
+              label="เนื้อหาบทความ"
               rules={[{ required: true, message: "กรุณาใส่เนื้อหาบทความ" }]}
             >
-              <TextArea
-                rows={18}
-                placeholder={`## หัวข้อหลัก\n\nเนื้อหาย่อหน้าแรก...\n\n## หัวข้อรอง\n\n- ประเด็นที่ 1\n- ประเด็นที่ 2`}
-                style={{
-                  borderRadius: 10,
-                  fontFamily: "monospace",
-                  fontSize: 13,
-                }}
-              />
+              <HtmlEditor authorId={authorId} showModal={showModal} />
             </Form.Item>
 
             {/* ✨ Reading Time + Word Count badge — คำนวณ real-time ขณะพิมพ์ */}

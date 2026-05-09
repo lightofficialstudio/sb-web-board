@@ -12,9 +12,41 @@ export const BUCKETS = {
   RESUMES: "resumes", // private — เรซูเม่ PDF
   LICENSES: "licenses", // private — ใบประกอบวิชาชีพ
   BLOG_COVERS: "blog-covers", // public — รูป cover บทความ
+  BLOG_IMAGES: "blog-images", // public — รูปภายในเนื้อหาบทความ
 } as const;
 
 export type BucketName = (typeof BUCKETS)[keyof typeof BUCKETS];
+
+// ✨ Public buckets ที่ต้องสร้างอัตโนมัติหากยังไม่มี
+const PUBLIC_BUCKETS: string[] = [
+  BUCKETS.AVATARS,
+  BUCKETS.BLOG_COVERS,
+  BUCKETS.BLOG_IMAGES,
+];
+
+// ✨ Ensure bucket มีอยู่ก่อน upload — ป้องกัน 500 เมื่อ bucket ไม่ถูก create ใน Supabase
+const ensureBucket = async (bucket: string): Promise<void> => {
+  const isPublic = PUBLIC_BUCKETS.includes(bucket);
+  const { error } = await supabaseAdmin.storage.createBucket(bucket, {
+    public: isPublic,
+    allowedMimeTypes: [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "image/gif",
+      "application/pdf",
+    ],
+    fileSizeLimit: 10 * 1024 * 1024, // 10 MB
+  });
+  // "already exists" ไม่ใช่ error — ภาวะปกติ
+  if (
+    error &&
+    !error.message.toLowerCase().includes("already exists") &&
+    !error.message.toLowerCase().includes("duplicate")
+  ) {
+    console.warn(`[storage] ensureBucket "${bucket}":`, error.message);
+  }
+};
 
 // ✨ Sanitize ชื่อไฟล์ให้ใช้ได้กับ Supabase Storage key (รองรับภาษาไทย + ช่องว่าง)
 // — แปลง Unicode → transliterate, แทนที่ช่องว่างด้วย underscore, เหลือเฉพาะ ASCII ที่ปลอดภัย
@@ -42,6 +74,9 @@ export const uploadFileService = async (
   const safeFileName = sanitizeFileName(fileName);
   const filePath = `${userId}/${Date.now()}_${safeFileName}`;
 
+  // ✨ Ensure bucket มีอยู่ก่อน upload (ป้องกัน 500 จาก bucket not found)
+  await ensureBucket(bucket);
+
   const { error } = await supabaseAdmin.storage
     .from(bucket)
     .upload(filePath, fileBuffer, {
@@ -50,6 +85,7 @@ export const uploadFileService = async (
     });
 
   if (error) {
+    console.error(`[storage] upload to ${bucket}/${filePath} failed:`, error);
     throw new Error(`Upload failed: ${error.message}`);
   }
 

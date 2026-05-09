@@ -9,6 +9,7 @@ const ALLOWED_BUCKETS: BucketName[] = [
   BUCKETS.RESUMES,
   BUCKETS.LICENSES,
   BUCKETS.BLOG_COVERS,
+  BUCKETS.BLOG_IMAGES,
 ];
 
 // 🔐 MIME types ที่อนุญาตต่อ bucket — ป้องกัน content-type spoofing
@@ -17,6 +18,7 @@ const ALLOWED_MIME: Record<BucketName, string[]> = {
   resumes: ["application/pdf"],
   licenses: ["application/pdf", "image/jpeg", "image/png"],
   "blog-covers": ["image/jpeg", "image/png", "image/webp", "image/gif"],
+  "blog-images": ["image/jpeg", "image/png", "image/webp", "image/gif"],
 };
 
 // 🔐 Hard limit ทุก bucket ไม่เกิน 10 MB (server enforced)

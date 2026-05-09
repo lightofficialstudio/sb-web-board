@@ -3,7 +3,15 @@ import { z } from "zod";
 // ✨ Schema สำหรับสร้างบทความใหม่
 export const createBlogSchema = z.object({
   title: z.string().min(1, "กรุณาระบุชื่อบทความ").max(200),
-  slug: z.string().min(1, "กรุณาระบุ slug").max(200).regex(/^[a-z0-9-]+$/, "slug ต้องเป็น lowercase a-z, 0-9, และ - เท่านั้น"),
+  // ✨ slug รองรับภาษาไทย + ASCII URL-safe chars (a-z, 0-9, -, ก-๙)
+  slug: z
+    .string()
+    .min(1, "กรุณาระบุ slug")
+    .max(300)
+    .regex(
+      /^[a-z0-9\u0E00-\u0E7F-]+$/,
+      "slug ต้องเป็น a-z, 0-9, -, หรือตัวอักษรภาษาไทยเท่านั้น",
+    ),
   content: z.string().min(1, "กรุณาใส่เนื้อหาบทความ"),
   excerpt: z.string().max(500).optional(),
   cover_image_url: z.string().url().optional().or(z.literal("")),

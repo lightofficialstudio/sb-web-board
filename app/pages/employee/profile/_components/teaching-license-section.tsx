@@ -1,7 +1,7 @@
 "use client";
 
 import { ModalComponent } from "@/app/components/modal/modal.component";
-import { deleteFile, uploadFile } from "@/app/lib/storage";
+import { deleteFile, extractStoragePath, getSignedUrl, uploadFile } from "@/app/lib/storage";
 import { useAuthStore } from "@/app/stores/auth-store";
 import {
   CheckCircleOutlined,
@@ -102,6 +102,7 @@ export const TeachingLicenseSection: React.FC = () => {
   const [modal, setModal] = useState<ModalState>(MODAL_CLOSED);
   const [isUploading, setIsUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null);
   // ✨ เก็บไฟล์ที่รอการยืนยันลบ
   const [pendingDelete, setPendingDelete] = useState<ResumeEntry | null>(null);
 
@@ -343,14 +344,33 @@ export const TeachingLicenseSection: React.FC = () => {
                       backgroundColor: token.colorFillQuaternary,
                     }}
                   >
-                    <Flex align="center" gap={10}>
+                    {/* ─── ซ้าย: คลิกเพื่อเปิดไฟล์ ─── */}
+                    <Flex
+                      align="center"
+                      gap={10}
+                      style={{ cursor: file.url ? (openingId === file.id ? "wait" : "pointer") : "default", flex: 1, minWidth: 0 }}
+                      onClick={async () => {
+                        if (!file.url || openingId === file.id) return;
+                        const path = extractStoragePath(file.url, "licenses");
+                        if (!path) return;
+                        setOpeningId(file.id);
+                        try {
+                          const signed = await getSignedUrl("licenses", path);
+                          window.open(signed, "_blank", "noopener,noreferrer");
+                        } catch {
+                          setModal({ open: true, type: "error", title: "เปิดไฟล์ไม่สำเร็จ", description: "ไม่สามารถสร้างลิงก์เข้าถึงไฟล์ได้ กรุณาลองใหม่อีกครั้ง" });
+                        } finally {
+                          setOpeningId(null);
+                        }
+                      }}
+                    >
                       <FilePdfOutlined style={{ fontSize: 20, color: "#ff4d4f", flexShrink: 0 }} />
                       <Flex vertical gap={2}>
-                        <Text strong style={{ fontSize: 13 }}>
+                        <Text strong style={{ fontSize: 13, textDecoration: file.url ? "underline" : "none", textDecorationColor: token.colorTextSecondary }}>
                           {file.fileName}
                         </Text>
                         <Text type="secondary" style={{ fontSize: 11 }}>
-                          {formatFileSize(file.fileSize)} · อัพโหลด {file.uploadedAt}
+                          {openingId === file.id ? "กำลังเปิดไฟล์..." : `${formatFileSize(file.fileSize)} · อัพโหลด ${file.uploadedAt}`}
                         </Text>
                       </Flex>
                     </Flex>

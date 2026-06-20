@@ -4,15 +4,18 @@ import { ModalComponent } from "@/app/components/modal/modal.component";
 import { uploadFile } from "@/app/lib/storage";
 import { useAuthStore } from "@/app/stores/auth-store";
 import {
+  CalendarOutlined,
   CameraOutlined,
   CheckCircleFilled,
   EditOutlined,
   EnvironmentOutlined,
   ExclamationCircleFilled,
   EyeOutlined,
+  GlobalOutlined,
   LinkOutlined,
   LockOutlined,
   MailOutlined,
+  PhoneOutlined,
   UserOutlined,
 } from "@ant-design/icons";
 import {
@@ -40,6 +43,7 @@ import { motion } from "framer-motion";
 import { patchBasicInfo, patchSummary } from "./_api/employee-profile-api";
 import { patchWorkLocation } from "./_api/work-location-api";
 import {
+  AvatarCropModal,
   BasicInfoSection,
   EducationHistorySection,
   GenderDobPhotoSection,
@@ -86,6 +90,9 @@ export default function EmployeeProfilePage() {
   const [isAvatarUploading, setIsAvatarUploading] = useState(false);
   const [showAvatarSuccess, setShowAvatarSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string>("");
+  const [pendingFileName, setPendingFileName] = useState<string>("");
+  const [isCropModalOpen, setIsCropModalOpen] = useState(false);
 
   // ✨ Modal state มาตรฐาน — ใช้ ModalComponent แทน openNotification ทุกจุด
   interface ModalState {
@@ -104,13 +111,11 @@ export default function EmployeeProfilePage() {
   const [modal, setModal] = useState<ModalState>(MODAL_CLOSED);
   const closeModal = () => setModal(MODAL_CLOSED);
 
-  // ✨ อัปโหลดรูปโปรไฟล์โดยคลิกที่ Avatar โดยตรง — auto-save ทันที ไม่ต้องกด "บันทึก"
-  const handleAvatarFileChange = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  // ✨ เลือกไฟล์ → validate → เปิด crop modal (ยังไม่ upload)
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user?.user_id) return;
-    e.target.value = ""; // ✨ reset เพื่อให้เลือกไฟล์เดิมซ้ำได้
+    e.target.value = "";
 
     // 🔐 ตรวจสอบประเภทไฟล์
     const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp"];
@@ -125,11 +130,25 @@ export default function EmployeeProfilePage() {
       return;
     }
 
+    // ✨ อ่านไฟล์เป็น data URL แล้วเปิด crop modal
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCropSrc(reader.result as string);
+      setPendingFileName(file.name);
+      setIsCropModalOpen(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // ✨ upload หลังจาก user กด "ยืนยัน" ใน crop modal
+  const handleCropConfirm = async (blob: Blob) => {
+    if (!user?.user_id) return;
+    setIsCropModalOpen(false);
     setIsAvatarUploading(true);
     try {
-      const result = await uploadFile("avatars", user.user_id, file);
+      const croppedFile = new File([blob], pendingFileName || "avatar.jpg", { type: "image/jpeg" });
+      const result = await uploadFile("avatars", user.user_id, croppedFile);
       updateField("profileImageUrl", result.url);
-      // ✨ auto-save — patchBasicInfo บันทึก profile_image_url ทันทีโดยไม่ต้องกด "บันทึก"
       await patchBasicInfo(user.user_id, { profile_image_url: result.url });
       updateUser({ profile_image_url: result.url });
       setShowAvatarSuccess(true);
@@ -145,6 +164,8 @@ export default function EmployeeProfilePage() {
       });
     } finally {
       setIsAvatarUploading(false);
+      setCropSrc("");
+      setPendingFileName("");
     }
   };
 
@@ -205,6 +226,8 @@ export default function EmployeeProfilePage() {
         gender: profile.gender,
         dateOfBirth: profile.dateOfBirth ? dayjs(profile.dateOfBirth) : null,
         nationality: profile.nationality,
+        preferredProvinces: profile.preferredProvinces ?? [],
+        canRelocate: profile.canRelocate ?? false,
       });
     } else if (sectionId === "personal-info") {
       form.setFieldsValue({
@@ -281,6 +304,13 @@ export default function EmployeeProfilePage() {
             profile_image_url: merged.profileImageUrl ?? null,
             profile_visibility: merged.profileVisibility,
           });
+          if (editSection === "basic-info") {
+            const vals = values as Record<string, unknown>;
+            await patchWorkLocation(user.user_id, {
+              preferred_provinces: (vals.preferredProvinces as string[]) ?? [],
+              can_relocate: (vals.canRelocate as boolean) ?? false,
+            });
+          }
         } else if (editSection === "skills") {
           // ✨ SkillsLocationSection — เฉพาะ languagesSpoken + itSkills (work-location แยกต่างหาก)
           const vals = values as Record<string, unknown>;
@@ -473,7 +503,7 @@ export default function EmployeeProfilePage() {
                               group-hover:opacity-100 group-hover:scale-100 transition-all duration-300"
                             style={{
                               inset: -5,
-                              borderRadius: token.borderRadiusLG + 5,
+                              borderRadius: "50%",
                               border: `2px dashed ${token.colorPrimary}`,
                             }}
                           />
@@ -485,21 +515,21 @@ export default function EmployeeProfilePage() {
                             className="absolute pointer-events-none"
                             style={{
                               inset: -4,
-                              borderRadius: token.borderRadiusLG + 4,
+                              borderRadius: "50%",
                               border: `3px solid #52c41a`,
                               boxShadow: `0 0 0 3px rgba(82,196,26,0.12)`,
                             }}
                           />
                         )}
 
-                        {/* Avatar + overlays — clipped เป็น rounded rect */}
+                        {/* Avatar + overlays — clipped เป็นวงกลม */}
                         <div
                           className="relative w-full h-full overflow-hidden"
-                          style={{ borderRadius: token.borderRadiusLG }}
+                          style={{ borderRadius: "50%" }}
                         >
                           <Avatar
                             size={120}
-                            shape="square"
+                            shape="circle"
                             icon={<UserOutlined />}
                             src={profile.profileImageUrl || null}
                             style={{
@@ -508,7 +538,6 @@ export default function EmployeeProfilePage() {
                               border: `3px solid ${token.colorBgContainer}`,
                               boxShadow: token.boxShadowSecondary,
                               backgroundColor: token.colorBgLayout,
-                              borderRadius: 0,
                               fontSize: 48,
                               display: "block",
                             }}
@@ -613,7 +642,7 @@ export default function EmployeeProfilePage() {
                           </div>
                         )}
 
-                        {/* Info row — จังหวัด + อีเมล */}
+                        {/* Info row 1 — จังหวัด + อีเมล */}
                         <div className="flex flex-wrap gap-x-5 gap-y-1.5 mt-3">
                           <span
                             className="flex items-center gap-1.5 text-sm"
@@ -630,6 +659,48 @@ export default function EmployeeProfilePage() {
                             {profile.email || user?.email || "—"}
                           </span>
                         </div>
+
+                        {/* Info row 2 — เบอร์มือถือ + เพศ + สัญชาติ + วันเกิด (secondary tier) */}
+                        {(profile.phoneNumber || profile.gender || profile.nationality || profile.dateOfBirth) && (
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                            {profile.phoneNumber && (
+                              <span
+                                className="flex items-center gap-1"
+                                style={{ color: token.colorTextTertiary, fontSize: 12 }}
+                              >
+                                <PhoneOutlined style={{ fontSize: 11 }} />
+                                {profile.phoneNumber}
+                              </span>
+                            )}
+                            {profile.gender && (
+                              <span
+                                className="flex items-center gap-1"
+                                style={{ color: token.colorTextTertiary, fontSize: 12 }}
+                              >
+                                <UserOutlined style={{ fontSize: 11 }} />
+                                {profile.gender}
+                              </span>
+                            )}
+                            {profile.nationality && (
+                              <span
+                                className="flex items-center gap-1"
+                                style={{ color: token.colorTextTertiary, fontSize: 12 }}
+                              >
+                                <GlobalOutlined style={{ fontSize: 11 }} />
+                                {profile.nationality}
+                              </span>
+                            )}
+                            {profile.dateOfBirth && (
+                              <span
+                                className="flex items-center gap-1"
+                                style={{ color: token.colorTextTertiary, fontSize: 12 }}
+                              >
+                                <CalendarOutlined style={{ fontSize: 11 }} />
+                                {dayjs(profile.dateOfBirth).format("DD/MM/YYYY")}
+                              </span>
+                            )}
+                          </div>
+                        )}
 
                         {/* Profile link */}
                         <div className="flex items-center gap-1.5 mt-1.5">
@@ -756,52 +827,6 @@ export default function EmployeeProfilePage() {
                   {/* Resume */}
                   <ProfileSectionWrapper id="resume" title="เรซูเม่ของฉัน">
                     <ResumeUploadSection userId={user?.user_id ?? ""} />
-                  </ProfileSectionWrapper>
-
-                  {/* ✨ สถานที่ทำงาน — Drawer แยก 1:1 */}
-                  <ProfileSectionWrapper
-                    title="สถานที่ทำงาน"
-                    onEdit={() => handleOpenEdit("work-location")}
-                  >
-                    <Flex vertical gap={16} style={{ width: "100%" }}>
-                      <Flex vertical gap={8}>
-                        <Text strong style={{ display: "block" }}>
-                          จังหวัดที่ต้องการทำงาน
-                        </Text>
-                        <Space size={[8, 8]} wrap>
-                          {profile.preferredProvinces?.length ? (
-                            profile.preferredProvinces.map((p) => (
-                              <Tag
-                                key={p}
-                                icon={<EnvironmentOutlined />}
-                                color="blue"
-                                style={{
-                                  padding: "4px 12px",
-                                  borderRadius: 999,
-                                }}
-                              >
-                                {p}
-                              </Tag>
-                            ))
-                          ) : (
-                            <Text type="secondary" italic>
-                              ยังไม่ได้ระบุ
-                            </Text>
-                          )}
-                        </Space>
-                      </Flex>
-                      <Flex align="center" gap={8}>
-                        <Text type="secondary" style={{ fontSize: 13 }}>
-                          ย้ายที่อยู่ได้:
-                        </Text>
-                        <Tag
-                          color={profile.canRelocate ? "success" : "default"}
-                          style={{ borderRadius: 999, margin: 0 }}
-                        >
-                          {profile.canRelocate ? "ได้" : "ไม่ได้"}
-                        </Tag>
-                      </Flex>
-                    </Flex>
                   </ProfileSectionWrapper>
 
                   {/* ใบประกอบวิชาชีพ */}
@@ -985,6 +1010,15 @@ export default function EmployeeProfilePage() {
         </Row>
       </Content>
 
+      {/* ✨ Avatar Crop Modal */}
+      <AvatarCropModal
+        open={isCropModalOpen}
+        imageSrc={cropSrc}
+        loading={isAvatarUploading}
+        onCancel={() => { setIsCropModalOpen(false); setCropSrc(""); setPendingFileName(""); }}
+        onConfirm={handleCropConfirm}
+      />
+
       {/* Edit Drawer */}
       <ProfileEditDrawer
         isOpen={isDrawerOpen}
@@ -1008,7 +1042,12 @@ export default function EmployeeProfilePage() {
         }
       >
         <Form form={form} layout="vertical" onFinish={handleSave}>
-          {editSection === "basic-info" && <BasicInfoSection form={form} />}
+          {editSection === "basic-info" && (
+            <>
+              <BasicInfoSection form={form} />
+              <WorkLocationSection form={form} />
+            </>
+          )}
           {editSection === "personal-info" && (
             <GenderDobPhotoSection form={form} userId={user?.user_id ?? ""} />
           )}

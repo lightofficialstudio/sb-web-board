@@ -1,3 +1,6 @@
+// Avatar Crop Modal
+export { AvatarCropModal } from "./avatar-crop-modal";
+
 // Basic Info
 export { BasicInfoSection } from "./basic-info-section";
 

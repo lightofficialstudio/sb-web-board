@@ -9,7 +9,7 @@ export const updateBasicSchema = z.object({
   gender: z.string().optional().nullable(),
   date_of_birth: z.string().optional().nullable(),
   nationality: z.string().optional().nullable(),
-  profile_image_url: z.string().url().optional().nullable(),
+  profile_image_url: z.string().url().or(z.literal("")).optional().nullable(),
   profile_visibility: z.enum(["public", "apply_only"]).optional(),
 });
 

@@ -27,6 +27,21 @@ export const uploadFile = async (
   };
 };
 
+// ✨ ดึง Signed URL สำหรับ private file (resumes, licenses) — อายุ 1 ชั่วโมง
+export const getSignedUrl = async (bucket: StorageBucket, path: string): Promise<string> => {
+  const { data } = await axios.get("/api/v1/storage/signed-url", {
+    params: { bucket, path },
+  });
+  return data.data.url as string;
+};
+
+// ✨ แยก storage path จาก URL ที่เก็บใน DB (private bucket — ไม่มี /public/ ใน path)
+export const extractStoragePath = (url: string, bucket: string): string | null => {
+  const marker = `/storage/v1/object/${bucket}/`;
+  const idx = url.indexOf(marker);
+  return idx !== -1 ? url.slice(idx + marker.length) : null;
+};
+
 // ✨ ลบไฟล์ออกจาก Supabase Storage ผ่าน API route
 export const deleteFile = async (bucket: StorageBucket, path: string) => {
   await axios.delete("/api/v1/storage/delete", {

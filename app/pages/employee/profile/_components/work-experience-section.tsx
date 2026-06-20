@@ -101,6 +101,10 @@ export const WorkExperienceSection: React.FC = () => {
   const { user } = useAuthStore();
 
   const workExperiences = profile.workExperiences || [];
+  // ✨ เรียงงานล่าสุดไว้บนสุดโดยดูจาก startDate — ใช้ originalIndex สำหรับ store operations
+  const sortedWorkExperiences = [...workExperiences].sort(
+    (a, b) => dayjs(b.startDate).diff(dayjs(a.startDate))
+  );
 
   const closeModal = () => setModal(MODAL_CLOSED);
 
@@ -336,6 +340,7 @@ export const WorkExperienceSection: React.FC = () => {
                     format={(value) => `${THAI_MONTHS[value.month()]} ${value.year() + 543}`}
                     placeholder="เลือกเดือน/ปี"
                     onChange={() => form.validateFields(["endDate"])}
+                    getPopupContainer={(trigger) => trigger.parentElement ?? document.body}
                   />
                 </Form.Item>
               </Col>
@@ -365,6 +370,7 @@ export const WorkExperienceSection: React.FC = () => {
                     format={(value) => `${THAI_MONTHS[value.month()]} ${value.year() + 543}`}
                     placeholder="เลือกเดือน/ปี"
                     disabled={Form.useWatch("inPresent", form)}
+                    getPopupContainer={(trigger) => trigger.parentElement ?? document.body}
                   />
                 </Form.Item>
               </Col>
@@ -389,8 +395,10 @@ export const WorkExperienceSection: React.FC = () => {
 
         {/* 2. รายการประวัติการทำงาน */}
         <Space orientation="vertical" size={16} style={{ width: "100%" }}>
-          {workExperiences.length > 0 ? (
-            workExperiences.map((experience, index) => (
+          {sortedWorkExperiences.length > 0 ? (
+            sortedWorkExperiences.map((experience) => {
+              const index = workExperiences.indexOf(experience);
+              return (
               <Card
                 key={index}
                 hoverable
@@ -474,7 +482,8 @@ export const WorkExperienceSection: React.FC = () => {
                   </Space>
                 </Row>
               </Card>
-            ))
+              );
+            })
           ) : (
             <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="ยังไม่มีข้อมูลประสบการณ์การทำงาน" />
           )}

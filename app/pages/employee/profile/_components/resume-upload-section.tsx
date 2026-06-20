@@ -19,7 +19,7 @@ import {
 } from "antd";
 import type { RcFile } from "antd/es/upload";
 import React, { useState } from "react";
-import { deleteFile, uploadFile } from "@/app/lib/storage";
+import { deleteFile, extractStoragePath, getSignedUrl, uploadFile } from "@/app/lib/storage";
 import { useProfileStore } from "../_stores/profile-store";
 import type { ResumeEntry } from "../_stores/profile-store";
 import { postResume, putResume, deleteResume } from "../_api/employee-profile-api";
@@ -72,6 +72,7 @@ export const ResumeUploadSection: React.FC<ResumeUploadSectionProps> = ({ userId
   const [modal, setModal] = useState<ModalState>(MODAL_CLOSED);
   const [isUploading, setIsUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [openingId, setOpeningId] = useState<string | null>(null);
   // ✨ เก็บ resume ที่รอการยืนยันลบ
   const [pendingDelete, setPendingDelete] = useState<ResumeEntry | null>(null);
 
@@ -221,11 +222,30 @@ export const ResumeUploadSection: React.FC<ResumeUploadSectionProps> = ({ userId
                     backgroundColor: isActive ? `${token.colorPrimary}0d` : token.colorFillQuaternary,
                   }}
                 >
-                  <Flex align="center" gap={10}>
+                  {/* ─── ซ้าย: คลิกเพื่อเปิดไฟล์ ─── */}
+                  <Flex
+                    align="center"
+                    gap={10}
+                    style={{ cursor: resume.url ? (openingId === resume.id ? "wait" : "pointer") : "default", flex: 1, minWidth: 0 }}
+                    onClick={async () => {
+                      if (!resume.url || openingId === resume.id) return;
+                      const path = extractStoragePath(resume.url, "resumes");
+                      if (!path) return;
+                      setOpeningId(resume.id);
+                      try {
+                        const signed = await getSignedUrl("resumes", path);
+                        window.open(signed, "_blank", "noopener,noreferrer");
+                      } catch {
+                        setModal({ open: true, type: "error", title: "เปิดไฟล์ไม่สำเร็จ", description: "ไม่สามารถสร้างลิงก์เข้าถึงไฟล์ได้ กรุณาลองใหม่อีกครั้ง" });
+                      } finally {
+                        setOpeningId(null);
+                      }
+                    }}
+                  >
                     <FilePdfOutlined style={{ fontSize: 22, color: "#ff4d4f", flexShrink: 0 }} />
                     <Flex vertical gap={2}>
                       <Flex align="center" gap={8}>
-                        <Text strong style={{ fontSize: 13 }}>
+                        <Text strong style={{ fontSize: 13, textDecoration: resume.url ? "underline" : "none", textDecorationColor: token.colorTextSecondary }}>
                           {resume.fileName}
                         </Text>
                         {isActive && (
@@ -239,12 +259,12 @@ export const ResumeUploadSection: React.FC<ResumeUploadSectionProps> = ({ userId
                         )}
                       </Flex>
                       <Text type="secondary" style={{ fontSize: 11 }}>
-                        {formatFileSize(resume.fileSize)} · อัพโหลด {resume.uploadedAt}
+                        {openingId === resume.id ? "กำลังเปิดไฟล์..." : `${formatFileSize(resume.fileSize)} · อัพโหลด ${resume.uploadedAt}`}
                       </Text>
                     </Flex>
                   </Flex>
 
-                  <Flex gap={8} align="center">
+                  <Flex gap={8} align="center" style={{ flexShrink: 0 }}>
                     {!isActive && (
                       <Button
                         size="small"

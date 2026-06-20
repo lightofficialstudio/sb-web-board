@@ -26,7 +26,7 @@ export const createResumeService = async (userId: string, payload: CreateResumeI
       fileUrl: true,
       fileSize: true,
       isActive: true,
-      createdAt: true,
+      uploadedAt: true,
     },
   });
 };
@@ -61,7 +61,7 @@ export const updateResumeService = async (id: string, payload: UpdateResumeInput
       fileUrl: true,
       fileSize: true,
       isActive: true,
-      createdAt: true,
+      uploadedAt: true,
     },
   });
 };

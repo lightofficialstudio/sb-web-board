@@ -884,11 +884,16 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
                   proficiency: lang.proficiency ?? undefined,
                 }),
               ) ?? [],
+            // ✨ map เป็น string array สำหรับ UI display และ form
+            languagesSpoken:
+              d.languages?.map((lang: { languageName: string }) => lang.languageName) ?? [],
             skills:
               d.skills?.map((sk: { id: string; skillName: string }) => ({
                 id: sk.id,
                 skillName: sk.skillName,
               })) ?? [],
+            itSkills:
+              d.skills?.map((sk: { skillName: string }) => sk.skillName) ?? [],
             // ✨ resumes จาก DB → map กลับใส่ store พร้อม url
             resumes: (d.resumes ?? []).map(
               (r: {
@@ -1146,6 +1151,12 @@ export const useProfileStore = create<ProfileStore>((set, get) => ({
                   url: lic.fileUrl,
                 }),
               ),
+            languagesSpoken:
+              d.languages?.map((lang: { languageName: string }) => lang.languageName) ??
+              state.profile.languagesSpoken,
+            itSkills:
+              d.skills?.map((sk: { skillName: string }) => sk.skillName) ??
+              state.profile.itSkills,
             resumes: (d.resumes ?? []).map(
               (r: {
                 id: string;
